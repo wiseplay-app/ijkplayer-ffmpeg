@@ -301,6 +301,7 @@ External library support:
                            on OSX if openssl and gnutls are not used [autodetect]
   --disable-xlib           disable xlib [autodetect]
   --disable-zlib           disable zlib [autodetect]
+  --disable-xml2           disable XML parsing using the C library libxml2 [autodetect]
 
   The following libraries provide various hardware acceleration features:
   --disable-audiotoolbox   disable Apple AudioToolbox code [autodetect]
@@ -1638,6 +1639,10 @@ EXTERNAL_LIBRARY_LIST="
     openal
     opencl
     opengl
+    x11grab
+    xlib
+    xml2
+    zlib
 "
 
 HWACCEL_AUTODETECT_LIBRARY_LIST="
@@ -5880,6 +5885,15 @@ enabled  lzma && check_lib lzma   lzma.h lzma_version_number -llzma
 check_lib libdl dlfcn.h "dlopen dlsym" || check_lib libdl dlfcn.h "dlopen dlsym" -ldl
 
 check_lib libm math.h sin -lm && LIBM="-lm"
+
+disabled xml2 || {
+    check_pkg_config libxml-2.0 libxml2/libxml/xmlversion.h xmlCheckVersion &&
+    require_pkg_config libxml-2.0 libxml2/libxml/xmlversion.h xmlCheckVersion
+    } || disable xml2
+
+
+check_lib math.h sin -lm && LIBM="-lm"
+disabled crystalhd || check_lib "stdint.h libcrystalhd/libcrystalhd_if.h" DtsCrystalHDVersion -lcrystalhd || disable crystalhd
 
 atan2f_args=2
 copysign_args=2
