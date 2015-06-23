@@ -530,7 +530,7 @@ static int amf_get_field_value2(GetByteContext *gb,
         if (size == namelen && !memcmp(gb->buffer-size, name, namelen)) {
             switch (bytestream2_get_byte(gb)) {
             case AMF_DATA_TYPE_NUMBER:
-                snprintf(dst, dst_size, "%g", av_int2double(bytestream2_get_be64(gb)));
+                snprintf(dst, dst_size, "%.0f", av_int2double(bytestream2_get_be64(gb)));
                 break;
             case AMF_DATA_TYPE_BOOL:
                 snprintf(dst, dst_size, "%s", bytestream2_get_byte(gb) ? "true" : "false");
@@ -553,7 +553,7 @@ static int amf_get_field_value2(GetByteContext *gb,
         if (len < 0 || bytestream2_get_bytes_left(gb) <= 0)
             return -1;
     }
-    return -1;
+    return ff_amf_get_field_value(data, data_end, name, dst, dst_size);
 }
 
 int ff_amf_get_field_value(const uint8_t *data, const uint8_t *data_end,

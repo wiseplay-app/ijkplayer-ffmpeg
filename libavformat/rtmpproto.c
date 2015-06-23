@@ -130,6 +130,7 @@ typedef struct RTMPContext {
     char          auth_params[500];
     int           do_reconnect;
     int           auth_tried;
+	char*         tcomm;
 } RTMPContext;
 
 #define PLAYER_KEY_OPEN_PART_LEN 30   ///< length of partial key used for first client digest signing
@@ -839,16 +840,16 @@ static int gen_pause(URLContext *s, RTMPContext *rt, int pause, uint32_t timesta
 /**
  * Generate 'publish' call and send it to the server.
  */
-static int gen_publish(URLContext *s, RTMPContext *rt)
+static int gen_publish(URLContext *s, RTMPContext *rt, char *value)
 {
     RTMPPacket pkt;
     uint8_t *p;
     int ret;
 
-    av_log(s, AV_LOG_DEBUG, "Sending publish command for '%s'\n", rt->playpath);
+    av_log(s, AV_LOG_DEBUG, "Sending publish command for '%s'\n", value);
 
     if ((ret = ff_rtmp_packet_create(&pkt, RTMP_SOURCE_CHANNEL, RTMP_PT_INVOKE,
-                                     0, 30 + strlen(rt->playpath))) < 0)
+                                     0, 30 + strlen(value))) < 0)
         return ret;
 
     pkt.extra = rt->stream_id;
@@ -857,7 +858,7 @@ static int gen_publish(URLContext *s, RTMPContext *rt)
     ff_amf_write_string(&p, "publish");
     ff_amf_write_number(&p, ++rt->nb_invokes);
     ff_amf_write_null(&p);
-    ff_amf_write_string(&p, rt->playpath);
+    ff_amf_write_string(&p, value);
     ff_amf_write_string(&p, "live");
 
     return rtmp_send_packet(rt, &pkt, 1);
@@ -985,6 +986,25 @@ static int gen_fcsubscribe_stream(URLContext *s, RTMPContext *rt,
     ff_amf_write_number(&p, ++rt->nb_invokes);
     ff_amf_write_null(&p);
     ff_amf_write_string(&p, subscribe);
+
+    return rtmp_send_packet(rt, &pkt, 1);
+}
+
+static int gen_tcomm(URLContext *s, RTMPContext *rt)
+{
+    RTMPPacket pkt;
+    uint8_t *p;
+    int ret;
+	
+	av_log(s, AV_LOG_DEBUG, "Sending tcomm...\n");
+    if ((ret = ff_rtmp_packet_create(&pkt, RTMP_SYSTEM_CHANNEL, RTMP_PT_INVOKE,
+                                     0, 13 + strlen(rt->tcomm))) < 0)
+        return ret;
+
+    p = pkt.data;
+    ff_amf_write_string(&p, rt->tcomm);
+    ff_amf_write_number(&p, ++rt->nb_invokes);
+    ff_amf_write_null(&p);
 
     return rtmp_send_packet(rt, &pkt, 1);
 }
@@ -2083,6 +2103,9 @@ static int read_number_result(RTMPPacket *pkt, double *number)
 static int handle_invoke_result(URLContext *s, RTMPPacket *pkt)
 {
     RTMPContext *rt = s->priv_data;
+	const uint8_t *data_end = pkt->data + pkt->size;
+	const uint8_t *data = pkt->data;
+	uint8_t tmpstr[256];
     char *tracked_method = NULL;
     int ret = 0;
 
@@ -2105,6 +2128,18 @@ static int handle_invoke_result(URLContext *s, RTMPPacket *pkt)
             if ((ret = gen_window_ack_size(s, rt)) < 0)
                 goto fail;
         }
+		
+		if (rt->is_input) {
+			if (rt->tcomm) {
+				if ((ret = gen_tcomm(s, rt)) < 0)
+					goto fail;
+			}
+
+			if (!ff_amf_get_field_value(data, data_end, "clientid", tmpstr, sizeof(tmpstr))) {
+				if ((ret = gen_publish(s, rt, tmpstr)) < 0)
+					goto fail;
+			}
+		}
 
         if ((ret = gen_create_stream(s, rt)) < 0)
             goto fail;
@@ -2129,7 +2164,7 @@ static int handle_invoke_result(URLContext *s, RTMPPacket *pkt)
         }
 
         if (!rt->is_input) {
-            if ((ret = gen_publish(s, rt)) < 0)
+            if ((ret = gen_publish(s, rt, rt->playpath)) < 0)
                 goto fail;
         } else {
             if (rt->live != -1) {
@@ -2176,7 +2211,6 @@ static int handle_invoke_status(URLContext *s, RTMPPacket *pkt)
                                        tmpstr, sizeof(tmpstr));
         if (!t)
             av_log(s, AV_LOG_ERROR, "Server error: %s\n", tmpstr);
-        return -1;
     }
 
     t = ff_amf_get_field_value(ptr, data_end, "code", tmpstr, sizeof(tmpstr));
@@ -3142,6 +3176,7 @@ static const AVOption rtmp_options[] = {
     {"rtmp_swfsize", "Size of the decompressed SWF file, required for SWFVerification.", OFFSET(swfsize), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, DEC},
     {"rtmp_swfurl", "URL of the SWF player. By default no value will be sent", OFFSET(swfurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
     {"rtmp_swfverify", "URL to player swf file, compute hash/size automatically.", OFFSET(swfverify), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
+	{"rtmp_tcomm", "tcomm", OFFSET(tcomm), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
     {"rtmp_tcurl", "URL of the target stream. Defaults to proto://host[:port]/app.", OFFSET(tcurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
     {"rtmp_listen", "Listen for incoming rtmp connections", OFFSET(listen), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },
     {"listen",      "Listen for incoming rtmp connections", OFFSET(listen), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },
