@@ -548,6 +548,12 @@ static int amf_get_field_value2(GetByteContext *gb,
                 return -1;
             }
             return 0;
+        } else {
+            switch (*data) {
+            case AMF_DATA_TYPE_OBJECT:
+                if (!ff_amf_get_field_value(data, data_end, name, dst, dst_size))
+                    return 0;
+            }
         }
         len = amf_tag_skip(gb);
         if (len < 0 || bytestream2_get_bytes_left(gb) <= 0)
