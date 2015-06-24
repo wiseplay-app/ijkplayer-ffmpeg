@@ -132,6 +132,7 @@ typedef struct RTMPContext {
     int           auth_tried;
 	char*         tcomm;
 	char*         token;
+	int           redirected;
 } RTMPContext;
 
 #define PLAYER_KEY_OPEN_PART_LEN 30   ///< length of partial key used for first client digest signing
@@ -1846,13 +1847,23 @@ static int do_llnw_auth(RTMPContext *rt, const char *user, const char *nonce)
     return 0;
 }
 
-static int handle_connect_error(URLContext *s, const char *desc)
+static int handle_connect_error(URLContext *s, RTMPPacket *pkt, const char *desc)
 {
     RTMPContext *rt = s->priv_data;
+	uint8_t *data_end = pkt->data + pkt->size;
     char buf[300], *ptr, authmod[15];
     int i = 0, ret = 0;
     const char *user = "", *salt = "", *opaque = NULL,
                *challenge = NULL, *cptr = NULL, *nonce = NULL;
+
+	if (!ff_amf_get_field_value(pkt->data + 9, data_end, "redirect", buf, sizeof(buf))) {
+		av_log(s, AV_LOG_DEBUG, "Following redirection to %s\n", buf);
+		s->filename = av_strdup(buf);
+		rt->app = NULL;
+		rt->tcurl = NULL;
+		rt->redirected = 1;
+		return 0;
+	}
 
     if (!(cptr = strstr(desc, "authmod=adobe")) &&
         !(cptr = strstr(desc, "authmod=llnw"))) {
@@ -1962,7 +1973,7 @@ static int handle_invoke_error(URLContext *s, RTMPPacket *pkt)
             level = rt->live ? AV_LOG_DEBUG : AV_LOG_WARNING;
             ret = 0;
         } else if (tracked_method && !strcmp(tracked_method, "connect")) {
-            ret = handle_connect_error(s, tmpstr);
+            ret = handle_connect_error(s, pkt, tmpstr);
             if (!ret) {
                 rt->do_reconnect = 1;
                 level = AV_LOG_VERBOSE;
@@ -2767,6 +2778,7 @@ static int rtmp_open(URLContext *s, const char *uri, int flags, AVDictionary **o
 
     rt->is_input = !(flags & AVIO_FLAG_WRITE);
 
+redirect:
     av_url_split(proto, sizeof(proto), auth, sizeof(auth),
                  hostname, sizeof(hostname), &port,
                  path, sizeof(path), s->filename);
@@ -2994,6 +3006,8 @@ reconnect:
             memset(rt->prev_pkt[i], 0,
                    sizeof(**rt->prev_pkt) * rt->nb_prev_pkt[i]);
         free_tracked_methods(rt);
+		if (rt->redirected)
+			goto redirect;
         goto reconnect;
     }
 
