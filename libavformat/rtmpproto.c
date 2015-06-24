@@ -130,9 +130,9 @@ typedef struct RTMPContext {
     char          auth_params[500];
     int           do_reconnect;
     int           auth_tried;
-	char*         tcomm;
-	char*         token;
-	int           redirected;
+    char*         tcomm;
+    char*         token;
+    int           redirected;
 } RTMPContext;
 
 #define PLAYER_KEY_OPEN_PART_LEN 30   ///< length of partial key used for first client digest signing
@@ -339,11 +339,11 @@ static unsigned char *decode_tea(char *token, uint8_t *secureToken)
         u |= ptr[i] << (n * 8);
         if (n == 3) {
             *v++ = u;
-	        u = 0;
-	        n = 0;
-	    } else {
-	        n++;
-	    }
+            u = 0;
+            n = 0;
+        } else {
+            n++;
+        }
     }
     /* any trailing chars */
     if (u)
@@ -354,7 +354,7 @@ static unsigned char *decode_tea(char *token, uint8_t *secureToken)
     out = av_malloc(n * 8);
     ptr = secureToken;
     v = (uint32_t *)out;
-	
+
     for (i = 0; i < n; i++) {
         u = (HEX2BIN(ptr[0]) << 4) + HEX2BIN(ptr[1]);
         u |= ((HEX2BIN(ptr[2]) << 4) + HEX2BIN(ptr[3])) << 8;
@@ -373,7 +373,7 @@ static unsigned char *decode_tea(char *token, uint8_t *secureToken)
     while (sum != 0) {
         e = sum >> 2 & 3;
         for (p = n - 1; p > 0; p--)
-	        z = v[p - 1], y = v[p] -= MX;
+            z = v[p - 1], y = v[p] -= MX;
         z = v[n - 1];
         y = v[0] -= MX;
         sum -= DELTA;
@@ -1063,8 +1063,8 @@ static int gen_tcomm(URLContext *s, RTMPContext *rt)
     RTMPPacket pkt;
     uint8_t *p;
     int ret;
-	
-	av_log(s, AV_LOG_DEBUG, "Sending tcomm...\n");
+
+    av_log(s, AV_LOG_DEBUG, "Sending tcomm...\n");
     if ((ret = ff_rtmp_packet_create(&pkt, RTMP_SYSTEM_CHANNEL, RTMP_PT_INVOKE,
                                      0, 13 + strlen(rt->tcomm))) < 0)
         return ret;
@@ -1080,13 +1080,13 @@ static int gen_tcomm(URLContext *s, RTMPContext *rt)
 static int gen_secure_token(URLContext *s, RTMPContext *rt, uint8_t *secureToken)
 {
     RTMPPacket pkt;
-	uint8_t *response;
+    uint8_t *response;
     uint8_t *p;
     int ret;
-	
-	response = decode_tea(rt->token, secureToken);
-	
-	av_log(s, AV_LOG_DEBUG, "Sending secure token (%s)...\n", response);
+
+    response = decode_tea(rt->token, secureToken);
+
+    av_log(s, AV_LOG_DEBUG, "Sending secure token (%s)...\n", response);
     if ((ret = ff_rtmp_packet_create(&pkt, RTMP_SYSTEM_CHANNEL, RTMP_PT_INVOKE,
                                      0, 35 + strlen(response))) < 0)
         return ret;
@@ -1095,7 +1095,7 @@ static int gen_secure_token(URLContext *s, RTMPContext *rt, uint8_t *secureToken
     ff_amf_write_string(&p, "secureTokenResponse");
     ff_amf_write_number(&p, 0.0);
     ff_amf_write_null(&p);
-	ff_amf_write_string(&p, response);
+    ff_amf_write_string(&p, response);
 
     return rtmp_send_packet(rt, &pkt, 1);
 }
@@ -1850,20 +1850,20 @@ static int do_llnw_auth(RTMPContext *rt, const char *user, const char *nonce)
 static int handle_connect_error(URLContext *s, RTMPPacket *pkt, const char *desc)
 {
     RTMPContext *rt = s->priv_data;
-	uint8_t *data_end = pkt->data + pkt->size;
+    uint8_t *data_end = pkt->data + pkt->size;
     char buf[300], *ptr, authmod[15];
     int i = 0, ret = 0;
     const char *user = "", *salt = "", *opaque = NULL,
                *challenge = NULL, *cptr = NULL, *nonce = NULL;
 
-	if (!ff_amf_get_field_value(pkt->data + 9, data_end, "redirect", buf, sizeof(buf))) {
-		av_log(s, AV_LOG_DEBUG, "Following redirection to %s\n", buf);
-		s->filename = av_strdup(buf);
-		rt->app = NULL;
-		rt->tcurl = NULL;
-		rt->redirected = 1;
-		return 0;
-	}
+    if (!ff_amf_get_field_value(pkt->data + 9, data_end, "redirect", buf, sizeof(buf))) {
+        av_log(s, AV_LOG_DEBUG, "Following redirection to %s\n", buf);
+        s->filename = av_strdup(buf);
+        rt->app = NULL;
+        rt->tcurl = NULL;
+        rt->redirected = 1;
+        return 0;
+    }
 
     if (!(cptr = strstr(desc, "authmod=adobe")) &&
         !(cptr = strstr(desc, "authmod=llnw"))) {
@@ -2205,9 +2205,9 @@ static int read_number_result(RTMPPacket *pkt, double *number)
 static int handle_invoke_result(URLContext *s, RTMPPacket *pkt)
 {
     RTMPContext *rt = s->priv_data;
-	const uint8_t *data_end = pkt->data + pkt->size;
-	const uint8_t *data = pkt->data;
-	uint8_t tmpstr[256];
+    const uint8_t *data_end = pkt->data + pkt->size;
+    const uint8_t *data = pkt->data;
+    uint8_t tmpstr[256];
     char *tracked_method = NULL;
     int ret = 0;
 
@@ -2229,23 +2229,23 @@ static int handle_invoke_result(URLContext *s, RTMPPacket *pkt)
         } else {
             if ((ret = gen_window_ack_size(s, rt)) < 0)
                 goto fail;
-			
-			if (rt->token) {
-				if (!ff_amf_get_field_value(data, data_end, "secureToken", tmpstr, sizeof(tmpstr))) {
-					if ((ret = gen_secure_token(s, rt, tmpstr)) < 0)
-						goto fail;
-				}
-			}
-			
-			if (rt->tcomm) {
-				if ((ret = gen_tcomm(s, rt)) < 0)
-					goto fail;
-					
-				if (!ff_amf_get_field_value(data, data_end, "clientid", tmpstr, sizeof(tmpstr))) {
-					if ((ret = gen_publish(s, rt, tmpstr)) < 0)
-						goto fail;
-				}
-			}
+            
+            if (rt->token) {
+                if (!ff_amf_get_field_value(data, data_end, "secureToken", tmpstr, sizeof(tmpstr))) {
+                    if ((ret = gen_secure_token(s, rt, tmpstr)) < 0)
+                        goto fail;
+                }
+            }
+            
+            if (rt->tcomm) {
+                if ((ret = gen_tcomm(s, rt)) < 0)
+                    goto fail;
+                    
+                if (!ff_amf_get_field_value(data, data_end, "clientid", tmpstr, sizeof(tmpstr))) {
+                    if ((ret = gen_publish(s, rt, tmpstr)) < 0)
+                        goto fail;
+                }
+            }
         }
 
         if ((ret = gen_create_stream(s, rt)) < 0)
@@ -3006,8 +3006,8 @@ reconnect:
             memset(rt->prev_pkt[i], 0,
                    sizeof(**rt->prev_pkt) * rt->nb_prev_pkt[i]);
         free_tracked_methods(rt);
-		if (rt->redirected)
-			goto redirect;
+        if (rt->redirected)
+            goto redirect;
         goto reconnect;
     }
 
@@ -3286,9 +3286,9 @@ static const AVOption rtmp_options[] = {
     {"rtmp_swfsize", "Size of the decompressed SWF file, required for SWFVerification.", OFFSET(swfsize), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, DEC},
     {"rtmp_swfurl", "URL of the SWF player. By default no value will be sent", OFFSET(swfurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
     {"rtmp_swfverify", "URL to player swf file, compute hash/size automatically.", OFFSET(swfverify), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
-	{"rtmp_tcomm", "tcomm", OFFSET(tcomm), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
+    {"rtmp_tcomm", "tcomm", OFFSET(tcomm), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
     {"rtmp_tcurl", "URL of the target stream. Defaults to proto://host[:port]/app.", OFFSET(tcurl), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC|ENC},
-	{"rtmp_token", "token", OFFSET(token), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
+    {"rtmp_token", "token", OFFSET(token), AV_OPT_TYPE_STRING, {.str = NULL }, 0, 0, DEC},
     {"rtmp_listen", "Listen for incoming rtmp connections", OFFSET(listen), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },
     {"listen",      "Listen for incoming rtmp connections", OFFSET(listen), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },
     {"timeout", "Maximum timeout (in seconds) to wait for incoming connections. -1 is infinite. Implies -rtmp_listen 1",  OFFSET(listen_timeout), AV_OPT_TYPE_INT, {.i64 = -1}, INT_MIN, INT_MAX, DEC, "rtmp_listen" },
