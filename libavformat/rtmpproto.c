@@ -351,7 +351,7 @@ static unsigned char *decode_tea(char *token, uint8_t *secureToken)
 
     /* prep text: hex2bin, multiples of 4 */
     n = (secure_len + 7) / 8;
-    out = av_malloc(n * 8);
+    out = av_mallocz(n * 8);
     ptr = secureToken;
     v = (uint32_t *)out;
 
