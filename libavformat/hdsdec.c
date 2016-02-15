@@ -296,8 +296,8 @@ static int create_pmt(AVFormatContext *s)
         av_dict_set(&p->metadata,"name",
             av_asprintf("Bandwidth: %dKbps", media->bitrate), 0);
 
-        ff_program_add_stream_index(s, p->id, media->video_stream->index);
-        ff_program_add_stream_index(s, p->id, media->audio_stream->index);
+        av_program_add_stream_index(s, p->id, media->video_stream->index);
+        av_program_add_stream_index(s, p->id, media->audio_stream->index);
     }
 
     return 0;
