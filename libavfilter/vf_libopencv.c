@@ -23,8 +23,14 @@
  * libopencv wrapper functions
  */
 
+#include "config.h"
+#if HAVE_OPENCV2_CORE_CORE_C_H
+#include <opencv2/core/core_c.h>
+#include <opencv2/imgproc/imgproc_c.h>
+#else
 #include <opencv/cv.h>
 #include <opencv/cxcore.h>
+#endif
 #include "libavutil/avstring.h"
 #include "libavutil/common.h"
 #include "libavutil/file.h"
@@ -151,7 +157,8 @@ static int read_shape_from_file(int *cols, int *rows, int **values, const char *
         if (buf[i] == '\n') {
             if (*rows == INT_MAX) {
                 av_log(log_ctx, AV_LOG_ERROR, "Overflow on the number of rows in the file\n");
-                return AVERROR_INVALIDDATA;
+                ret = AVERROR_INVALIDDATA;
+                goto end;
             }
             ++(*rows);
             *cols = FFMAX(*cols, w);
@@ -165,10 +172,13 @@ static int read_shape_from_file(int *cols, int *rows, int **values, const char *
     if (*rows > (SIZE_MAX / sizeof(int) / *cols)) {
         av_log(log_ctx, AV_LOG_ERROR, "File with size %dx%d is too big\n",
                *rows, *cols);
-        return AVERROR_INVALIDDATA;
+        ret = AVERROR_INVALIDDATA;
+        goto end;
     }
-    if (!(*values = av_mallocz_array(sizeof(int) * *rows, *cols)))
-        return AVERROR(ENOMEM);
+    if (!(*values = av_mallocz_array(sizeof(int) * *rows, *cols))) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
 
     /* fill *values */
     p    = buf;
@@ -182,6 +192,8 @@ static int read_shape_from_file(int *cols, int *rows, int **values, const char *
                 (*values)[*cols*i + j] = !!av_isgraph(*(p++));
         }
     }
+
+end:
     av_file_unmap(buf, size);
 
 #ifdef DEBUG
@@ -322,7 +334,7 @@ typedef struct OCVFilterEntry {
     void (*end_frame_filter)(AVFilterContext *ctx, IplImage *inimg, IplImage *outimg);
 } OCVFilterEntry;
 
-static OCVFilterEntry ocv_filter_entries[] = {
+static const OCVFilterEntry ocv_filter_entries[] = {
     { "dilate", sizeof(DilateContext), dilate_init, dilate_uninit, dilate_end_frame_filter },
     { "erode",  sizeof(DilateContext), dilate_init, dilate_uninit, erode_end_frame_filter  },
     { "smooth", sizeof(SmoothContext), smooth_init, NULL, smooth_end_frame_filter },
@@ -338,7 +350,7 @@ static av_cold int init(AVFilterContext *ctx)
         return AVERROR(EINVAL);
     }
     for (i = 0; i < FF_ARRAY_ELEMS(ocv_filter_entries); i++) {
-        OCVFilterEntry *entry = &ocv_filter_entries[i];
+        const OCVFilterEntry *entry = &ocv_filter_entries[i];
         if (!strcmp(s->name, entry->name)) {
             s->init             = entry->init;
             s->uninit           = entry->uninit;

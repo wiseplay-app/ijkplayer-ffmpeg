@@ -287,17 +287,24 @@ static int decode_hextile(VmncContext *c, uint8_t* dst, GetByteContext *gb,
                     return AVERROR_INVALIDDATA;
                 }
                 for (k = 0; k < rects; k++) {
+                    int rect_x, rect_y, rect_w, rect_h;
                     if (color)
                         fg = vmnc_get_pixel(gb, bpp, c->bigendian);
                     xy = bytestream2_get_byte(gb);
                     wh = bytestream2_get_byte(gb);
-                    if (   (xy >> 4) + (wh >> 4) + 1 > w - i
-                        || (xy & 0xF) + (wh & 0xF)+1 > h - j) {
+
+                    rect_x = xy >> 4;
+                    rect_y = xy & 0xF;
+                    rect_w = (wh >> 4) + 1;
+                    rect_h = (wh & 0xF) + 1;
+
+                    if (rect_x + rect_w > w - i || rect_y + rect_h > h - j) {
                         av_log(c->avctx, AV_LOG_ERROR, "Rectangle outside picture\n");
                         return AVERROR_INVALIDDATA;
                     }
-                    paint_rect(dst2, xy >> 4, xy & 0xF,
-                               (wh>>4)+1, (wh & 0xF)+1, fg, bpp, stride);
+
+                    paint_rect(dst2, rect_x, rect_y,
+                               rect_w, rect_h, fg, bpp, stride);
                 }
             }
         }
@@ -528,7 +535,6 @@ static av_cold int decode_init(AVCodecContext *avctx)
     c->width  = avctx->width;
     c->height = avctx->height;
     c->bpp    = avctx->bits_per_coded_sample;
-    c->bpp2   = c->bpp / 8;
 
     switch (c->bpp) {
     case 8:
@@ -537,13 +543,18 @@ static av_cold int decode_init(AVCodecContext *avctx)
     case 16:
         avctx->pix_fmt = AV_PIX_FMT_RGB555;
         break;
+    case 24:
+        /* 24 bits is not technically supported, but some clients might
+         * mistakenly set it, so let's assume they actually meant 32 bits */
+        c->bpp = 32;
     case 32:
-        avctx->pix_fmt = AV_PIX_FMT_RGB32;
+        avctx->pix_fmt = AV_PIX_FMT_0RGB32;
         break;
     default:
         av_log(avctx, AV_LOG_ERROR, "Unsupported bitdepth %i\n", c->bpp);
         return AVERROR_INVALIDDATA;
     }
+    c->bpp2 = c->bpp / 8;
 
     c->pic = av_frame_alloc();
     if (!c->pic)
@@ -573,5 +584,5 @@ AVCodec ff_vmnc_decoder = {
     .init           = decode_init,
     .close          = decode_end,
     .decode         = decode_frame,
-    .capabilities   = CODEC_CAP_DR1,
+    .capabilities   = AV_CODEC_CAP_DR1,
 };

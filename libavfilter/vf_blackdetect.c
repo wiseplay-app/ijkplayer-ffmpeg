@@ -80,8 +80,10 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_NONE
     };
 
-    ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
-    return 0;
+    AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
+    if (!fmts_list)
+        return AVERROR(ENOMEM);
+    return ff_set_common_formats(ctx, fmts_list);
 }
 
 static int config_input(AVFilterLink *inlink)
@@ -153,7 +155,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *picref)
 
     av_log(ctx, AV_LOG_DEBUG,
            "frame:%"PRId64" picture_black_ratio:%f pts:%s t:%s type:%c\n",
-           inlink->frame_count, picture_black_ratio,
+           inlink->frame_count_out, picture_black_ratio,
            av_ts2str(picref->pts), av_ts2timestr(picref->pts, &inlink->time_base),
            av_get_picture_type_char(picref->pict_type));
 

@@ -41,18 +41,18 @@ static void op##_rv40_qpel##size##_mc33_##insn(uint8_t *dst, const uint8_t *src,
 
 #if HAVE_YASM
 void ff_put_rv40_chroma_mc8_mmx  (uint8_t *dst, uint8_t *src,
-                                  int stride, int h, int x, int y);
+                                  ptrdiff_t stride, int h, int x, int y);
 void ff_avg_rv40_chroma_mc8_mmxext(uint8_t *dst, uint8_t *src,
-                                   int stride, int h, int x, int y);
+                                   ptrdiff_t stride, int h, int x, int y);
 void ff_avg_rv40_chroma_mc8_3dnow(uint8_t *dst, uint8_t *src,
-                                  int stride, int h, int x, int y);
+                                  ptrdiff_t stride, int h, int x, int y);
 
 void ff_put_rv40_chroma_mc4_mmx  (uint8_t *dst, uint8_t *src,
-                                  int stride, int h, int x, int y);
+                                  ptrdiff_t stride, int h, int x, int y);
 void ff_avg_rv40_chroma_mc4_mmxext(uint8_t *dst, uint8_t *src,
-                                   int stride, int h, int x, int y);
+                                   ptrdiff_t stride, int h, int x, int y);
 void ff_avg_rv40_chroma_mc4_3dnow(uint8_t *dst, uint8_t *src,
-                                  int stride, int h, int x, int y);
+                                  ptrdiff_t stride, int h, int x, int y);
 
 #define DECLARE_WEIGHT(opt) \
 void ff_rv40_weight_func_rnd_16_##opt(uint8_t *dst, uint8_t *src1, uint8_t *src2, \
@@ -101,7 +101,7 @@ static void OP ## rv40_qpel ##SIZE ##_mc ##PH ##PV ##OPT(uint8_t *dst,  \
             ff_ ##OP ##rv40_qpel_h ## OPT(dst + i, stride, src + i,     \
                                           stride, SIZE, HCOFF(PH));     \
     }                                                                   \
-};
+}
 
 /** Declare functions for sizes 8 and 16 and given operations
  *  and qpel position. */
@@ -214,7 +214,7 @@ DEFINE_FN(avg, 16, mmx)
 
 av_cold void ff_rv40dsp_init_x86(RV34DSPContext *c)
 {
-    int cpu_flags = av_get_cpu_flags();
+    av_unused int cpu_flags = av_get_cpu_flags();
 
 #if HAVE_MMX_INLINE
     if (INLINE_MMX(cpu_flags)) {

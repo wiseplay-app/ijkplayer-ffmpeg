@@ -136,13 +136,13 @@ static inline void cavs_idct8_1d(int16_t *block, uint64_t bias)
     SBUTTERFLY(a,c,d,dq,q) /* a=aeim d=bfjn */\
     SBUTTERFLY(t,b,c,dq,q) /* t=cgko c=dhlp */
 
-static void cavs_idct8_add_mmx(uint8_t *dst, int16_t *block, int stride)
+static void cavs_idct8_add_mmx(uint8_t *dst, int16_t *block, ptrdiff_t stride)
 {
     int i;
     LOCAL_ALIGNED(16, int16_t, b2, [64]);
 
     for(i=0; i<2; i++){
-        cavs_idct8_1d(block+4*i, ff_pw_4.a);
+        cavs_idct8_1d(block + 4 * i, ff_pw_4.a);
 
         __asm__ volatile(
             "psraw     $3, %%mm7  \n\t"
@@ -153,7 +153,7 @@ static void cavs_idct8_add_mmx(uint8_t *dst, int16_t *block, int stride)
             "psraw     $3, %%mm2  \n\t"
             "psraw     $3, %%mm1  \n\t"
             "psraw     $3, %%mm0  \n\t"
-            "movq   %%mm7,   (%0) \n\t"
+            "movq   %%mm7,  (%0)  \n\t"
             TRANSPOSE4( %%mm0, %%mm2, %%mm4, %%mm6, %%mm7 )
             "movq   %%mm0,  8(%0)  \n\t"
             "movq   %%mm6, 24(%0)  \n\t"
@@ -166,7 +166,7 @@ static void cavs_idct8_add_mmx(uint8_t *dst, int16_t *block, int stride)
             "movq   %%mm0, 32(%0)  \n\t"
             "movq   %%mm3, 48(%0)  \n\t"
             :
-            : "r"(b2+32*i)
+            : "r"(b2 + 32 * i)
             : "memory"
         );
     }
@@ -334,7 +334,8 @@ static void cavs_idct8_add_mmx(uint8_t *dst, int16_t *block, int stride)
    }
 
 #define QPEL_CAVS(OPNAME, OP, MMX)\
-static void OPNAME ## cavs_qpel8_h_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel8_h_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{\
     int h=8;\
     __asm__ volatile(\
         "pxor %%mm7, %%mm7          \n\t"\
@@ -382,43 +383,53 @@ static void OPNAME ## cavs_qpel8_h_ ## MMX(uint8_t *dst, const uint8_t *src, int
     );\
 }\
 \
-static inline void OPNAME ## cavs_qpel8or16_v1_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride, int h){\
+static inline void OPNAME ## cavs_qpel8or16_v1_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride, int h)\
+{                                                                       \
   QPEL_CAVSVNUM(QPEL_CAVSV1,OP,ff_pw_64,ff_pw_96,ff_pw_42)      \
 }\
 \
-static inline void OPNAME ## cavs_qpel8or16_v2_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride, int h){\
+static inline void OPNAME ## cavs_qpel8or16_v2_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride, int h)\
+{                                                                       \
   QPEL_CAVSVNUM(QPEL_CAVSV2,OP,ff_pw_4,ff_pw_5,ff_pw_42)        \
 }\
 \
-static inline void OPNAME ## cavs_qpel8or16_v3_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride, int h){\
+static inline void OPNAME ## cavs_qpel8or16_v3_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride, int h)\
+{                                                                       \
   QPEL_CAVSVNUM(QPEL_CAVSV3,OP,ff_pw_64,ff_pw_96,ff_pw_42)      \
 }\
 \
-static void OPNAME ## cavs_qpel8_v1_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel8_v1_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8or16_v1_ ## MMX(dst  , src  , dstStride, srcStride, 8);\
 }\
-static void OPNAME ## cavs_qpel16_v1_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel16_v1_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8or16_v1_ ## MMX(dst  , src  , dstStride, srcStride, 16);\
     OPNAME ## cavs_qpel8or16_v1_ ## MMX(dst+8, src+8, dstStride, srcStride, 16);\
 }\
 \
-static void OPNAME ## cavs_qpel8_v2_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel8_v2_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8or16_v2_ ## MMX(dst  , src  , dstStride, srcStride, 8);\
 }\
-static void OPNAME ## cavs_qpel16_v2_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel16_v2_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8or16_v2_ ## MMX(dst  , src  , dstStride, srcStride, 16);\
     OPNAME ## cavs_qpel8or16_v2_ ## MMX(dst+8, src+8, dstStride, srcStride, 16);\
 }\
 \
-static void OPNAME ## cavs_qpel8_v3_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel8_v3_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8or16_v3_ ## MMX(dst  , src  , dstStride, srcStride, 8);\
 }\
-static void OPNAME ## cavs_qpel16_v3_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel16_v3_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8or16_v3_ ## MMX(dst  , src  , dstStride, srcStride, 16);\
     OPNAME ## cavs_qpel8or16_v3_ ## MMX(dst+8, src+8, dstStride, srcStride, 16);\
 }\
 \
-static void OPNAME ## cavs_qpel16_h_ ## MMX(uint8_t *dst, const uint8_t *src, int dstStride, int srcStride){\
+static void OPNAME ## cavs_qpel16_h_ ## MMX(uint8_t *dst, const uint8_t *src, ptrdiff_t dstStride, ptrdiff_t srcStride)\
+{                                                                       \
     OPNAME ## cavs_qpel8_h_ ## MMX(dst  , src  , dstStride, srcStride);\
     OPNAME ## cavs_qpel8_h_ ## MMX(dst+8, src+8, dstStride, srcStride);\
     src += 8*srcStride;\
@@ -563,9 +574,11 @@ static av_cold void cavsdsp_init_3dnow(CAVSDSPContext *c,
 
 av_cold void ff_cavsdsp_init_x86(CAVSDSPContext *c, AVCodecContext *avctx)
 {
-    int cpu_flags = av_get_cpu_flags();
+    av_unused int cpu_flags = av_get_cpu_flags();
 
-    cavsdsp_init_mmx(c, avctx);
+    if (X86_MMX(cpu_flags))
+        cavsdsp_init_mmx(c, avctx);
+
 #if HAVE_AMD3DNOW_INLINE
     if (INLINE_AMD3DNOW(cpu_flags))
         cavsdsp_init_3dnow(c, avctx);

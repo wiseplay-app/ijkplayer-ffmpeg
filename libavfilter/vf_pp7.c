@@ -274,8 +274,11 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_GBRP,
         AV_PIX_FMT_GRAY8,    AV_PIX_FMT_NONE
     };
-    ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
-    return 0;
+
+    AVFilterFormats *fmts_list = ff_make_format_list(pix_fmts);
+    if (!fmts_list)
+        return AVERROR(ENOMEM);
+    return ff_set_common_formats(ctx, fmts_list);
 }
 
 static int config_input(AVFilterLink *inlink)
@@ -325,8 +328,8 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
         qp_table = av_frame_get_qp_table(in, &qp_stride, &pp7->qscale_type);
 
     if (!ctx->is_disabled) {
-        const int cw = FF_CEIL_RSHIFT(inlink->w, pp7->hsub);
-        const int ch = FF_CEIL_RSHIFT(inlink->h, pp7->vsub);
+        const int cw = AV_CEIL_RSHIFT(inlink->w, pp7->hsub);
+        const int ch = AV_CEIL_RSHIFT(inlink->h, pp7->vsub);
 
         /* get a new frame if in-place is not possible or if the dimensions
         * are not multiple of 8 */

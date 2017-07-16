@@ -121,7 +121,7 @@ static void sum_square_butterfly(AC3EncodeContext *s, float sum[4],
 static void clip_coefficients(AudioDSPContext *adsp, float *coef,
                               unsigned int len)
 {
-    adsp->vector_clipf(coef, coef, COEF_MIN, COEF_MAX, len);
+    adsp->vector_clipf(coef, coef, len, COEF_MIN, COEF_MAX);
 }
 
 
@@ -139,7 +139,7 @@ static CoefType calc_cpl_coord(CoefSumType energy_ch, CoefSumType energy_cpl)
 av_cold int ff_ac3_float_encode_init(AVCodecContext *avctx)
 {
     AC3EncodeContext *s = avctx->priv_data;
-    s->fdsp = avpriv_float_dsp_alloc(avctx->flags & CODEC_FLAG_BITEXACT);
+    s->fdsp = avpriv_float_dsp_alloc(avctx->flags & AV_CODEC_FLAG_BITEXACT);
     if (!s->fdsp)
         return AVERROR(ENOMEM);
     return ff_ac3_encode_init(avctx);

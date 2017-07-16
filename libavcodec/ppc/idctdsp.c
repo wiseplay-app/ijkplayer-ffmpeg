@@ -169,7 +169,7 @@ static void idct_altivec(int16_t *blk)
     block[7] = vx7;
 }
 
-static void idct_put_altivec(uint8_t *dest, int stride, int16_t *blk)
+static void idct_put_altivec(uint8_t *dest, ptrdiff_t stride, int16_t *blk)
 {
     vec_s16 *block = (vec_s16 *) blk;
     vec_u8 tmp;
@@ -198,7 +198,7 @@ static void idct_put_altivec(uint8_t *dest, int stride, int16_t *blk)
     COPY(dest, vx7);
 }
 
-static void idct_add_altivec(uint8_t *dest, int stride, int16_t *blk)
+static void idct_add_altivec(uint8_t *dest, ptrdiff_t stride, int16_t *blk)
 {
     vec_s16 *block = (vec_s16 *) blk;
     vec_u8 tmp;
@@ -261,7 +261,7 @@ av_cold void ff_idctdsp_init_ppc(IDCTDSPContext *c, AVCodecContext *avctx,
         return;
 
     if (!high_bit_depth && avctx->lowres == 0) {
-        if ((avctx->idct_algo == FF_IDCT_AUTO && !(avctx->flags & CODEC_FLAG_BITEXACT)) ||
+        if ((avctx->idct_algo == FF_IDCT_AUTO && !(avctx->flags & AV_CODEC_FLAG_BITEXACT)) ||
             (avctx->idct_algo == FF_IDCT_ALTIVEC)) {
             c->idct      = idct_altivec;
             c->idct_add  = idct_add_altivec;
