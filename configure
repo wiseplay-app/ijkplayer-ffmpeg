@@ -5886,15 +5886,6 @@ check_lib libdl dlfcn.h "dlopen dlsym" || check_lib libdl dlfcn.h "dlopen dlsym"
 
 check_lib libm math.h sin -lm && LIBM="-lm"
 
-disabled xml2 || {
-    check_pkg_config libxml-2.0 libxml2/libxml/xmlversion.h xmlCheckVersion &&
-    require_pkg_config libxml-2.0 libxml2/libxml/xmlversion.h xmlCheckVersion
-    } || disable xml2
-
-
-check_lib math.h sin -lm && LIBM="-lm"
-disabled crystalhd || check_lib "stdint.h libcrystalhd/libcrystalhd_if.h" DtsCrystalHDVersion -lcrystalhd || disable crystalhd
-
 atan2f_args=2
 copysign_args=2
 hypot_args=2
