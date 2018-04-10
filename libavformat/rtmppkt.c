@@ -549,9 +549,9 @@ static int amf_get_field_value2(GetByteContext *gb,
             }
             return 0;
         } else {
-            switch (*data) {
+            switch (bytestream2_get_byte(gb)) {
             case AMF_DATA_TYPE_OBJECT:
-                if (!ff_amf_get_field_value(data, data_end, name, dst, dst_size))
+                if (!ff_amf_get_field_value(gb->buffer, gb->buffer + bytestream2_get_bytes_left(gb), name, dst, dst_size))
                     return 0;
             }
         }
@@ -559,7 +559,7 @@ static int amf_get_field_value2(GetByteContext *gb,
         if (len < 0 || bytestream2_get_bytes_left(gb) <= 0)
             return -1;
     }
-    return ff_amf_get_field_value(data, data_end, name, dst, dst_size);
+    return ff_amf_get_field_value(gb->buffer, gb->buffer + bytestream2_get_bytes_left(gb), name, dst, dst_size);
 }
 
 int ff_amf_get_field_value(const uint8_t *data, const uint8_t *data_end,
