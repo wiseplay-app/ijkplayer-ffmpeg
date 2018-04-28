@@ -219,7 +219,7 @@ static int read_chomp_line(AVIOContext *s, char *buf, int maxlen)
     int len = ff_get_line(s, buf, maxlen);
     while (len > 0 && av_isspace(buf[len - 1]))
         buf[--len] = '\0';
-    while (len > 0 && (buf[0] == '/' || av_isspace(buf[0])))
+    while (len > 0 && av_isspace(buf[0]))
         len = av_strlcpy(buf, buf + 1, len);
     return len;
 }
