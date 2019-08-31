@@ -236,6 +236,7 @@ static int open_slave(AVFormatContext *avf, char *slave, TeeSlave *tee_slave)
     avf2->io_close = avf->io_close;
     avf2->interrupt_callback = avf->interrupt_callback;
     avf2->flags = avf->flags;
+    avf2->strict_std_compliance = avf->strict_std_compliance;
 
     tee_slave->stream_map = av_calloc(avf->nb_streams, sizeof(*tee_slave->stream_map));
     if (!tee_slave->stream_map) {
@@ -406,7 +407,7 @@ static void log_slave(TeeSlave *slave, void *log_ctx, int log_level)
 {
     int i;
     av_log(log_ctx, log_level, "filename:'%s' format:%s\n",
-           slave->avf->filename, slave->avf->oformat->name);
+           slave->avf->url, slave->avf->oformat->name);
     for (i = 0; i < slave->avf->nb_streams; i++) {
         AVStream *st = slave->avf->streams[i];
         AVBSFContext *bsf = slave->bsfs[i];
@@ -448,7 +449,7 @@ static int tee_write_header(AVFormatContext *avf)
 {
     TeeContext *tee = avf->priv_data;
     unsigned nb_slaves = 0, i;
-    const char *filename = avf->filename;
+    const char *filename = avf->url;
     char **slaves = NULL;
     int ret;
 

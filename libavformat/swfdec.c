@@ -61,7 +61,7 @@ static int get_swf_tag(AVIOContext *pb, int *len_ptr)
 }
 
 
-static int swf_probe(AVProbeData *p)
+static int swf_probe(const AVProbeData *p)
 {
     GetBitContext gb;
     int len, xmin, xmax, ymin, ymax;
@@ -95,7 +95,7 @@ static int swf_probe(AVProbeData *p)
     if (p->buf[3] >= 20 || xmax < 16 || ymax < 16)
         return AVPROBE_SCORE_MAX / 4;
 
-    return AVPROBE_SCORE_MAX;
+    return AVPROBE_SCORE_EXTENSION + 1;
 }
 
 #if CONFIG_ZLIB

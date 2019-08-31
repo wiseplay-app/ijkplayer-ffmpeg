@@ -22,14 +22,15 @@
 #include "hevc_parse.h"
 
 static int hevc_decode_nal_units(const uint8_t *buf, int buf_size, HEVCParamSets *ps,
-                                 HEVCSEIContext *sei, int is_nalff, int nal_length_size,
+                                 HEVCSEI *sei, int is_nalff, int nal_length_size,
                                  int err_recognition, int apply_defdispwin, void *logctx)
 {
     int i;
     int ret = 0;
     H2645Packet pkt = { 0 };
 
-    ret = ff_h2645_packet_split(&pkt, buf, buf_size, logctx, is_nalff, nal_length_size, AV_CODEC_ID_HEVC, 1);
+    ret = ff_h2645_packet_split(&pkt, buf, buf_size, logctx, is_nalff,
+                                nal_length_size, AV_CODEC_ID_HEVC, 1, 0);
     if (ret < 0) {
         goto done;
     }
@@ -75,7 +76,7 @@ done:
 }
 
 int ff_hevc_decode_extradata(const uint8_t *data, int size, HEVCParamSets *ps,
-                             HEVCSEIContext *sei, int *is_nalff, int *nal_length_size,
+                             HEVCSEI *sei, int *is_nalff, int *nal_length_size,
                              int err_recognition, int apply_defdispwin, void *logctx)
 {
     int ret = 0;

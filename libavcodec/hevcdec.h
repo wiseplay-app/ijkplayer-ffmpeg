@@ -26,6 +26,7 @@
 #include <stdatomic.h>
 
 #include "libavutil/buffer.h"
+#include "libavutil/md5.h"
 
 #include "avcodec.h"
 #include "bswapdsp.h"
@@ -363,7 +364,7 @@ typedef struct HEVCLocalContext {
     DECLARE_ALIGNED(32, uint8_t, edge_emu_buffer)[(MAX_PB_SIZE + 7) * EDGE_EMU_BUFFER_STRIDE * 2];
     /* The extended size between the new edge emu buffer is abused by SAO */
     DECLARE_ALIGNED(32, uint8_t, edge_emu_buffer2)[(MAX_PB_SIZE + 7) * EDGE_EMU_BUFFER_STRIDE * 2];
-    DECLARE_ALIGNED(32, int16_t, tmp [MAX_PB_SIZE * MAX_PB_SIZE]);
+    DECLARE_ALIGNED(32, int16_t, tmp)[MAX_PB_SIZE * MAX_PB_SIZE];
 
     int ct_depth;
     CodingUnit cu;
@@ -405,6 +406,8 @@ typedef struct HEVCContext {
     uint8_t *sao_pixel_buffer_v[3];
 
     HEVCParamSets ps;
+    HEVCSEI sei;
+    struct AVMD5 *md5_ctx;
 
     AVBufferPool *tab_mvf_pool;
     AVBufferPool *rpl_tab_pool;
@@ -427,6 +430,7 @@ typedef struct HEVCContext {
     int max_ra;
     int bs_width;
     int bs_height;
+    int overlap;
 
     int is_decoded;
     int no_rasl_output_flag;
@@ -480,8 +484,6 @@ typedef struct HEVCContext {
 
     int nal_length_size;    ///< Number of bytes used for nal length (1, 2 or 4)
     int nuh_layer_id;
-
-    HEVCSEIContext sei;
 } HEVCContext;
 
 /**
@@ -543,9 +545,27 @@ int ff_hevc_res_scale_sign_flag(HEVCContext *s, int idx);
 /**
  * Get the number of candidate references for the current frame.
  */
-int ff_hevc_frame_nb_refs(HEVCContext *s);
+int ff_hevc_frame_nb_refs(const HEVCContext *s);
 
 int ff_hevc_set_new_ref(HEVCContext *s, AVFrame **frame, int poc);
+
+static av_always_inline int ff_hevc_nal_is_nonref(enum HEVCNALUnitType type)
+{
+    switch (type) {
+    case HEVC_NAL_TRAIL_N:
+    case HEVC_NAL_TSA_N:
+    case HEVC_NAL_STSA_N:
+    case HEVC_NAL_RADL_N:
+    case HEVC_NAL_RASL_N:
+    case HEVC_NAL_VCL_N10:
+    case HEVC_NAL_VCL_N12:
+    case HEVC_NAL_VCL_N14:
+        return 1;
+        break;
+    default: break;
+    }
+    return 0;
+}
 
 /**
  * Find next frame in output order and put a reference to it in frame.

@@ -240,6 +240,8 @@ static int magy_decode_slice10(AVCodecContext *avctx, void *tdata,
 
         dst = (uint16_t *)p->data[i] + j * sheight * stride;
         if (flags & 1) {
+            if (get_bits_left(&gb) < bps * width * height)
+                return AVERROR_INVALIDDATA;
             for (k = 0; k < height; k++) {
                 for (x = 0; x < width; x++)
                     dst[x] = get_bits(&gb, bps);
@@ -280,11 +282,9 @@ static int magy_decode_slice10(AVCodecContext *avctx, void *tdata,
         case GRADIENT:
             dst = (uint16_t *)p->data[i] + j * sheight * stride;
             s->llviddsp.add_left_pred_int16(dst, dst, max, width, 0);
-            left = lefttop = 0;
             dst += stride;
             if (interlaced) {
                 s->llviddsp.add_left_pred_int16(dst, dst, max, width, 0);
-                left = lefttop = 0;
                 dst += stride;
             }
             for (k = 1 + interlaced; k < height; k++) {
@@ -302,14 +302,13 @@ static int magy_decode_slice10(AVCodecContext *avctx, void *tdata,
             break;
         case MEDIAN:
             dst = (uint16_t *)p->data[i] + j * sheight * stride;
-            lefttop = left = dst[0];
             s->llviddsp.add_left_pred_int16(dst, dst, max, width, 0);
             dst += stride;
             if (interlaced) {
-                lefttop = left = dst[0];
                 s->llviddsp.add_left_pred_int16(dst, dst, max, width, 0);
                 dst += stride;
             }
+            lefttop = left = dst[0];
             for (k = 1 + interlaced; k < height; k++) {
                 magicyuv_median_pred16(dst, dst - fake_stride, dst, width, &left, &lefttop, max);
                 lefttop = left = dst[0];
@@ -348,7 +347,7 @@ static int magy_decode_slice(AVCodecContext *avctx, void *tdata,
     MagicYUVContext *s = avctx->priv_data;
     int interlaced = s->interlaced;
     AVFrame *p = s->p;
-    int i, k, x;
+    int i, k, x, min_width;
     GetBitContext gb;
     uint8_t *dst;
 
@@ -371,6 +370,8 @@ static int magy_decode_slice(AVCodecContext *avctx, void *tdata,
 
         dst = p->data[i] + j * sheight * stride;
         if (flags & 1) {
+            if (get_bits_left(&gb) < 8* width * height)
+                return AVERROR_INVALIDDATA;
             for (k = 0; k < height; k++) {
                 for (x = 0; x < width; x++)
                     dst[x] = get_bits(&gb, 8);
@@ -411,36 +412,36 @@ static int magy_decode_slice(AVCodecContext *avctx, void *tdata,
         case GRADIENT:
             dst = p->data[i] + j * sheight * stride;
             s->llviddsp.add_left_pred(dst, dst, width, 0);
-            left = lefttop = 0;
             dst += stride;
             if (interlaced) {
                 s->llviddsp.add_left_pred(dst, dst, width, 0);
-                left = lefttop = 0;
                 dst += stride;
             }
+            min_width = FFMIN(width, 32);
             for (k = 1 + interlaced; k < height; k++) {
                 top = dst[-fake_stride];
                 left = top + dst[0];
                 dst[0] = left;
-                for (x = 1; x < width; x++) {
+                for (x = 1; x < min_width; x++) { /* dsp need aligned 32 */
                     top = dst[x - fake_stride];
                     lefttop = dst[x - (fake_stride + 1)];
                     left += top - lefttop + dst[x];
                     dst[x] = left;
                 }
+                if (width > 32)
+                    s->llviddsp.add_gradient_pred(dst + 32, fake_stride, width - 32);
                 dst += stride;
             }
             break;
         case MEDIAN:
             dst = p->data[i] + j * sheight * stride;
-            lefttop = left = dst[0];
             s->llviddsp.add_left_pred(dst, dst, width, 0);
             dst += stride;
             if (interlaced) {
-                lefttop = left = dst[0];
                 s->llviddsp.add_left_pred(dst, dst, width, 0);
                 dst += stride;
             }
+            lefttop = left = dst[0];
             for (k = 1 + interlaced; k < height; k++) {
                 s->llviddsp.add_median_pred(dst, dst - fake_stride,
                                              dst, width, &left, &lefttop);
@@ -586,6 +587,13 @@ static int magy_decode_frame(AVCodecContext *avctx, void *data,
         avctx->pix_fmt = AV_PIX_FMT_YUV422P10;
         s->hshift[1] =
         s->hshift[2] = 1;
+        s->max = 1024;
+        s->huff_build = huff_build10;
+        s->magy_decode_slice = magy_decode_slice10;
+        s->bps = 10;
+        break;
+    case 0x76:
+        avctx->pix_fmt = AV_PIX_FMT_YUV444P10;
         s->max = 1024;
         s->huff_build = huff_build10;
         s->magy_decode_slice = magy_decode_slice10;

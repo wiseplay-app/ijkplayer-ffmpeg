@@ -38,6 +38,7 @@
 #include "mpegvideo.h"
 #include "mjpeg.h"
 #include "mjpegenc.h"
+#include "profiles.h"
 
 static int alloc_huffman(MpegEncContext *s)
 {
@@ -358,12 +359,6 @@ static int amv_encode_picture(AVCodecContext *avctx, AVPacket *pkt,
 
     av_pix_fmt_get_chroma_sub_sample(avctx->pix_fmt, &chroma_h_shift, &chroma_v_shift);
 
-#if FF_API_EMU_EDGE
-    //CODEC_FLAG_EMU_EDGE have to be cleared
-    if(s->avctx->flags & CODEC_FLAG_EMU_EDGE)
-        return AVERROR(EINVAL);
-#endif
-
     if ((avctx->height & 15) && avctx->strict_std_compliance > FF_COMPLIANCE_UNOFFICIAL) {
         av_log(avctx, AV_LOG_ERROR,
                "Heights which are not a multiple of 16 might fail with some decoders, "
@@ -424,6 +419,7 @@ AVCodec ff_mjpeg_encoder = {
         AV_PIX_FMT_YUVJ420P, AV_PIX_FMT_YUVJ422P, AV_PIX_FMT_YUVJ444P, AV_PIX_FMT_NONE
     },
     .priv_class     = &mjpeg_class,
+    .profiles       = NULL_IF_CONFIG_SMALL(ff_mjpeg_profiles),
 };
 #endif
 

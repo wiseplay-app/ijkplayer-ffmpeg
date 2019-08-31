@@ -35,7 +35,6 @@
 #include "h264_ps.h"
 #include "golomb.h"
 
-#define MAX_LOG2_MAX_FRAME_NUM    (12 + 4)
 #define MIN_LOG2_MAX_FRAME_NUM    4
 
 #define EXTENDED_SAR       255
@@ -348,7 +347,7 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
 
     sps->data_size = gb->buffer_end - gb->buffer;
     if (sps->data_size > sizeof(sps->data)) {
-        av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized SPS\n");
+        av_log(avctx, AV_LOG_DEBUG, "Truncating likely oversized SPS\n");
         sps->data_size = sizeof(sps->data);
     }
     memcpy(sps->data, gb->buffer, sps->data_size);
@@ -450,8 +449,17 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
         sps->log2_max_poc_lsb = t + 4;
     } else if (sps->poc_type == 1) { // FIXME #define
         sps->delta_pic_order_always_zero_flag = get_bits1(gb);
-        sps->offset_for_non_ref_pic           = get_se_golomb(gb);
-        sps->offset_for_top_to_bottom_field   = get_se_golomb(gb);
+        sps->offset_for_non_ref_pic           = get_se_golomb_long(gb);
+        sps->offset_for_top_to_bottom_field   = get_se_golomb_long(gb);
+
+        if (   sps->offset_for_non_ref_pic         == INT32_MIN
+            || sps->offset_for_top_to_bottom_field == INT32_MIN
+        ) {
+            av_log(avctx, AV_LOG_ERROR,
+                   "offset_for_non_ref_pic or offset_for_top_to_bottom_field is out of range\n");
+            goto fail;
+        }
+
         sps->poc_cycle_length                 = get_ue_golomb(gb);
 
         if ((unsigned)sps->poc_cycle_length >=
@@ -461,8 +469,14 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
             goto fail;
         }
 
-        for (i = 0; i < sps->poc_cycle_length; i++)
-            sps->offset_for_ref_frame[i] = get_se_golomb(gb);
+        for (i = 0; i < sps->poc_cycle_length; i++) {
+            sps->offset_for_ref_frame[i] = get_se_golomb_long(gb);
+            if (sps->offset_for_ref_frame[i] == INT32_MIN) {
+                av_log(avctx, AV_LOG_ERROR,
+                       "offset_for_ref_frame is out of range\n");
+                goto fail;
+            }
+        }
     } else if (sps->poc_type != 2) {
         av_log(avctx, AV_LOG_ERROR, "illegal POC type %d\n", sps->poc_type);
         goto fail;
@@ -745,7 +759,7 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
 
     pps->data_size = gb->buffer_end - gb->buffer;
     if (pps->data_size > sizeof(pps->data)) {
-        av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized PPS "
+        av_log(avctx, AV_LOG_DEBUG, "Truncating likely oversized PPS "
                "(%"SIZE_SPECIFIER" > %"SIZE_SPECIFIER")\n",
                pps->data_size, sizeof(pps->data));
         pps->data_size = sizeof(pps->data);

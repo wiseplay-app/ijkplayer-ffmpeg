@@ -19,7 +19,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/atomic.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/buffer.h"
@@ -33,6 +32,7 @@
 #include "libavutil/pixdesc.h"
 #include "libavutil/rational.h"
 #include "libavutil/samplefmt.h"
+#include "libavutil/thread.h"
 
 #define FF_INTERNAL_FIELDS 1
 #include "framequeue.h"
@@ -183,10 +183,12 @@ void avfilter_link_free(AVFilterLink **link)
     av_freep(link);
 }
 
+#if FF_API_FILTER_GET_SET
 int avfilter_link_get_channels(AVFilterLink *link)
 {
     return link->channels;
 }
+#endif
 
 void ff_filter_set_ready(AVFilterContext *filter, unsigned priority)
 {
@@ -573,58 +575,6 @@ int avfilter_process_command(AVFilterContext *filter, const char *cmd, const cha
     return AVERROR(ENOSYS);
 }
 
-static AVFilter *first_filter;
-static AVFilter **last_filter = &first_filter;
-
-#if !FF_API_NOCONST_GET_NAME
-const
-#endif
-AVFilter *avfilter_get_by_name(const char *name)
-{
-    const AVFilter *f = NULL;
-
-    if (!name)
-        return NULL;
-
-    while ((f = avfilter_next(f)))
-        if (!strcmp(f->name, name))
-            return (AVFilter *)f;
-
-    return NULL;
-}
-
-int avfilter_register(AVFilter *filter)
-{
-    AVFilter **f = last_filter;
-
-    /* the filter must select generic or internal exclusively */
-    av_assert0((filter->flags & AVFILTER_FLAG_SUPPORT_TIMELINE) != AVFILTER_FLAG_SUPPORT_TIMELINE);
-
-    filter->next = NULL;
-
-    while(*f || avpriv_atomic_ptr_cas((void * volatile *)f, NULL, filter))
-        f = &(*f)->next;
-    last_filter = &filter->next;
-
-    return 0;
-}
-
-const AVFilter *avfilter_next(const AVFilter *prev)
-{
-    return prev ? prev->next : first_filter;
-}
-
-#if FF_API_OLD_FILTER_REGISTER
-AVFilter **av_filter_next(AVFilter **filter)
-{
-    return filter ? &(*filter)->next : &first_filter;
-}
-
-void avfilter_uninit(void)
-{
-}
-#endif
-
 int avfilter_pad_count(const AVFilterPad *pads)
 {
     int count;
@@ -653,10 +603,11 @@ static void *filter_child_next(void *obj, void *prev)
 
 static const AVClass *filter_child_class_next(const AVClass *prev)
 {
+    void *opaque = NULL;
     const AVFilter *f = NULL;
 
     /* find the filter that corresponds to prev */
-    while (prev && (f = avfilter_next(f)))
+    while (prev && (f = av_filter_iterate(&opaque)))
         if (f->priv_class == prev)
             break;
 
@@ -665,7 +616,7 @@ static const AVClass *filter_child_class_next(const AVClass *prev)
         return NULL;
 
     /* find next filter with specific options */
-    while ((f = avfilter_next(f)))
+    while ((f = av_filter_iterate(&opaque)))
         if (f->priv_class)
             return f->priv_class;
 
@@ -677,10 +628,12 @@ static const AVClass *filter_child_class_next(const AVClass *prev)
 static const AVOption avfilter_options[] = {
     { "thread_type", "Allowed thread types", OFFSET(thread_type), AV_OPT_TYPE_FLAGS,
         { .i64 = AVFILTER_THREAD_SLICE }, 0, INT_MAX, FLAGS, "thread_type" },
-        { "slice", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AVFILTER_THREAD_SLICE }, .unit = "thread_type" },
+        { "slice", NULL, 0, AV_OPT_TYPE_CONST, { .i64 = AVFILTER_THREAD_SLICE }, .flags = FLAGS, .unit = "thread_type" },
     { "enable", "set enable expression", OFFSET(enable_str), AV_OPT_TYPE_STRING, {.str=NULL}, .flags = FLAGS },
     { "threads", "Allowed number of threads", OFFSET(nb_threads), AV_OPT_TYPE_INT,
         { .i64 = 0 }, 0, INT_MAX, FLAGS },
+    { "extra_hw_frames", "Number of extra hardware frames to allocate for the user",
+        OFFSET(extra_hw_frames), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, INT_MAX, FLAGS },
     { NULL },
 };
 
@@ -782,14 +735,6 @@ err:
     av_free(ret);
     return NULL;
 }
-
-#if FF_API_AVFILTER_OPEN
-int avfilter_open(AVFilterContext **filter_ctx, AVFilter *filter, const char *inst_name)
-{
-    *filter_ctx = ff_filter_alloc(filter, inst_name);
-    return *filter_ctx ? 0 : AVERROR(ENOMEM);
-}
-#endif
 
 static void free_link(AVFilterLink *link)
 {
@@ -939,13 +884,6 @@ static int process_options(AVFilterContext *ctx, AVDictionary **options,
     return count;
 }
 
-#if FF_API_AVFILTER_INIT_FILTER
-int avfilter_init_filter(AVFilterContext *filter, const char *args, void *opaque)
-{
-    return avfilter_init_str(filter, args);
-}
-#endif
-
 int avfilter_init_dict(AVFilterContext *ctx, AVDictionary **options)
 {
     int ret = 0;
@@ -996,7 +934,7 @@ int avfilter_init_str(AVFilterContext *filter, const char *args)
             return AVERROR(EINVAL);
         }
 
-#if FF_API_OLD_FILTER_OPTS || FF_API_OLD_FILTER_OPTS_ERROR
+#if FF_API_OLD_FILTER_OPTS_ERROR
             if (   !strcmp(filter->filter->name, "format")     ||
                    !strcmp(filter->filter->name, "noformat")   ||
                    !strcmp(filter->filter->name, "frei0r")     ||
@@ -1056,14 +994,6 @@ int avfilter_init_str(AVFilterContext *filter, const char *args)
             while ((p = strchr(p, ':')))
                 *p++ = '|';
 
-#if FF_API_OLD_FILTER_OPTS
-            if (deprecated)
-                av_log(filter, AV_LOG_WARNING, "This syntax is deprecated. Use "
-                       "'|' to separate the list items.\n");
-
-            av_log(filter, AV_LOG_DEBUG, "compat: called with args=[%s]\n", copy);
-            ret = process_options(filter, &options, copy);
-#else
             if (deprecated) {
                 av_log(filter, AV_LOG_ERROR, "This syntax is deprecated. Use "
                        "'|' to separate the list items ('%s' instead of '%s')\n",
@@ -1072,7 +1002,6 @@ int avfilter_init_str(AVFilterContext *filter, const char *args)
             } else {
                 ret = process_options(filter, &options, copy);
             }
-#endif
             av_freep(&copy);
 
             if (ret < 0)
@@ -1441,7 +1370,7 @@ static int ff_filter_activate_default(AVFilterContext *filter)
      and request_frame() to acknowledge status changes), to run once more
      and check if enough input was present for several frames.
 
-   Exemples of scenarios to consider:
+   Examples of scenarios to consider:
 
    - buffersrc: activate if frame_wanted_out to notify the application;
      activate when the application adds a frame to push it immediately.
@@ -1467,7 +1396,7 @@ static int ff_filter_activate_default(AVFilterContext *filter)
    - If an input has frames in fifo and frame_wanted_out == 0, dequeue a
      frame and call filter_frame().
 
-     Ratinale: filter frames as soon as possible instead of leaving them
+     Rationale: filter frames as soon as possible instead of leaving them
      queued; frame_wanted_out < 0 is not possible since the old API does not
      set it nor provides any similar feedback; frame_wanted_out > 0 happens
      when min_samples > 0 and there are not enough samples queued.
@@ -1519,9 +1448,19 @@ int ff_inlink_acknowledge_status(AVFilterLink *link, int *rstatus, int64_t *rpts
     return 1;
 }
 
+size_t ff_inlink_queued_frames(AVFilterLink *link)
+{
+    return ff_framequeue_queued_frames(&link->fifo);
+}
+
 int ff_inlink_check_available_frame(AVFilterLink *link)
 {
     return ff_framequeue_queued_frames(&link->fifo) > 0;
+}
+
+int ff_inlink_queued_samples(AVFilterLink *link)
+{
+    return ff_framequeue_queued_samples(&link->fifo);
 }
 
 int ff_inlink_check_available_samples(AVFilterLink *link, unsigned min)
@@ -1570,12 +1509,17 @@ int ff_inlink_consume_samples(AVFilterLink *link, unsigned min, unsigned max,
         return 0;
     if (link->status_in)
         min = FFMIN(min, ff_framequeue_queued_samples(&link->fifo));
-    ret = take_samples(link, min, link->max_samples, &frame);
+    ret = take_samples(link, min, max, &frame);
     if (ret < 0)
         return ret;
     consume_update(link, frame);
     *rframe = frame;
     return 1;
+}
+
+AVFrame *ff_inlink_peek_frame(AVFilterLink *link, size_t idx)
+{
+    return ff_framequeue_peek(&link->fifo, idx);
 }
 
 int ff_inlink_make_frame_writable(AVFilterLink *link, AVFrame **rframe)
@@ -1691,4 +1635,25 @@ int ff_outlink_get_status(AVFilterLink *link)
 const AVClass *avfilter_get_class(void)
 {
     return &avfilter_class;
+}
+
+int ff_filter_init_hw_frames(AVFilterContext *avctx, AVFilterLink *link,
+                             int default_pool_size)
+{
+    AVHWFramesContext *frames;
+
+    // Must already be set by caller.
+    av_assert0(link->hw_frames_ctx);
+
+    frames = (AVHWFramesContext*)link->hw_frames_ctx->data;
+
+    if (frames->initial_pool_size == 0) {
+        // Dynamic allocation is necessarily supported.
+    } else if (avctx->extra_hw_frames >= 0) {
+        frames->initial_pool_size += avctx->extra_hw_frames;
+    } else {
+        frames->initial_pool_size = default_pool_size;
+    }
+
+    return 0;
 }

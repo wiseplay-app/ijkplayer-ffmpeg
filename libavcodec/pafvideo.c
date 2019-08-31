@@ -78,6 +78,7 @@ static av_cold int paf_video_init(AVCodecContext *avctx)
 {
     PAFVideoDecContext *c = avctx->priv_data;
     int i;
+    int ret;
 
     c->width  = avctx->width;
     c->height = avctx->height;
@@ -90,6 +91,9 @@ static av_cold int paf_video_init(AVCodecContext *avctx)
     }
 
     avctx->pix_fmt = AV_PIX_FMT_PAL8;
+    ret = av_image_check_size2(avctx->width, FFALIGN(avctx->height, 256), avctx->max_pixels, avctx->pix_fmt, 0, avctx);
+    if (ret < 0)
+        return ret;
 
     c->pic = av_frame_alloc();
     if (!c->pic)
@@ -281,13 +285,14 @@ static int paf_video_decode(AVCodecContext *avctx, void *data,
         return AVERROR_INVALIDDATA;
     }
 
+    if ((code & 0xF) == 0 &&
+        c->video_size / 32 - (int64_t)bytestream2_get_bytes_left(&c->gb) > c->video_size / 32 * (int64_t)avctx->discard_damaged_percentage / 100)
+        return AVERROR_INVALIDDATA;
+
     if ((ret = ff_reget_buffer(avctx, c->pic)) < 0)
         return ret;
 
     if (code & 0x20) {  // frame is keyframe
-        for (i = 0; i < 4; i++)
-            memset(c->frame[i], 0, c->frame_size);
-
         memset(c->pic->data[1], 0, AVPALETTE_SIZE);
         c->current_frame  = 0;
         c->pic->key_frame = 1;
@@ -323,6 +328,10 @@ static int paf_video_decode(AVCodecContext *avctx, void *data,
         }
         c->pic->palette_has_changed = 1;
     }
+
+    if (code & 0x20)
+        for (i = 0; i < 4; i++)
+            memset(c->frame[i], 0, c->frame_size);
 
     switch (code & 0x0F) {
     case 0:

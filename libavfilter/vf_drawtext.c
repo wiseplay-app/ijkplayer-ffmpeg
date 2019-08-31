@@ -88,6 +88,9 @@ static const char *const var_names[] = {
     "x",
     "y",
     "pict_type",
+    "pkt_pos",
+    "pkt_duration",
+    "pkt_size",
     NULL
 };
 
@@ -125,6 +128,9 @@ enum var_name {
     VAR_X,
     VAR_Y,
     VAR_PICT_TYPE,
+    VAR_PKT_POS,
+    VAR_PKT_DURATION,
+    VAR_PKT_SIZE,
     VAR_VARS_NB
 };
 
@@ -238,7 +244,7 @@ static const AVOption drawtext_options[]= {
     {"rate",            "set rate (timecode only)",         OFFSET(tc_rate),       AV_OPT_TYPE_RATIONAL, {.dbl=0},           0,  INT_MAX, FLAGS},
     {"reload",     "reload text file for each frame",                       OFFSET(reload),     AV_OPT_TYPE_BOOL, {.i64=0}, 0, 1, FLAGS},
     { "alpha",       "apply alpha while rendering", OFFSET(a_expr),      AV_OPT_TYPE_STRING, { .str = "1"     },          .flags = FLAGS },
-    {"fix_bounds", "check and fix text coords to avoid clipping", OFFSET(fix_bounds), AV_OPT_TYPE_BOOL, {.i64=1}, 0, 1, FLAGS},
+    {"fix_bounds", "check and fix text coords to avoid clipping", OFFSET(fix_bounds), AV_OPT_TYPE_BOOL, {.i64=0}, 0, 1, FLAGS},
     {"start_number", "start frame number for n/frame_num variable", OFFSET(start_number), AV_OPT_TYPE_INT, {.i64=0}, 0, INT_MAX, FLAGS},
 
 #if CONFIG_LIBFRIBIDI
@@ -862,20 +868,49 @@ static int config_input(AVFilterLink *inlink)
 
 static int command(AVFilterContext *ctx, const char *cmd, const char *arg, char *res, int res_len, int flags)
 {
-    DrawTextContext *s = ctx->priv;
+    DrawTextContext *old = ctx->priv;
+    DrawTextContext *new = NULL;
+    int ret;
 
     if (!strcmp(cmd, "reinit")) {
-        int ret;
-        uninit(ctx);
-        s->reinit = 1;
-        if ((ret = av_set_options_string(ctx, arg, "=", ":")) < 0)
-            return ret;
-        if ((ret = init(ctx)) < 0)
-            return ret;
-        return config_input(ctx->inputs[0]);
-    }
+        new = av_mallocz(sizeof(DrawTextContext));
+        if (!new)
+            return AVERROR(ENOMEM);
 
-    return AVERROR(ENOSYS);
+        new->class = &drawtext_class;
+        ret = av_opt_copy(new, old);
+        if (ret < 0)
+            goto fail;
+
+        ctx->priv = new;
+        ret = av_set_options_string(ctx, arg, "=", ":");
+        if (ret < 0) {
+            ctx->priv = old;
+            goto fail;
+        }
+
+        ret = init(ctx);
+        if (ret < 0) {
+            uninit(ctx);
+            ctx->priv = old;
+            goto fail;
+        }
+
+        new->reinit = 1;
+
+        ctx->priv = old;
+        uninit(ctx);
+        av_freep(&old);
+
+        ctx->priv = new;
+        return config_input(ctx->inputs[0]);
+    } else
+        return AVERROR(ENOSYS);
+
+fail:
+    av_log(ctx, AV_LOG_ERROR, "Failed to process command. Continuing with existing parameters.\n");
+    av_freep(&new);
+    return ret;
 }
 
 static int func_pict_type(AVFilterContext *ctx, AVBPrint *bp,
@@ -915,6 +950,14 @@ static int func_pts(AVFilterContext *ctx, AVBPrint *bp,
             if (ms < 0) {
                 sign = '-';
                 ms = -ms;
+            }
+            if (argc >= 3) {
+                if (!strcmp(argv[2], "24HH")) {
+                    ms %= 24 * 60 * 60 * 1000;
+                } else {
+                    av_log(ctx, AV_LOG_ERROR, "Invalid argument '%s'\n", argv[2]);
+                    return AVERROR(EINVAL);
+                }
             }
             av_bprintf(bp, "%c%02d:%02d:%02d.%03d", sign,
                        (int)(ms / (60 * 60 * 1000)),
@@ -1390,6 +1433,7 @@ static int draw_text(AVFilterContext *ctx, AVFrame *frame,
 
     s->x = s->var_values[VAR_X] = av_expr_eval(s->x_pexpr, s->var_values, &s->prng);
     s->y = s->var_values[VAR_Y] = av_expr_eval(s->y_pexpr, s->var_values, &s->prng);
+    /* It is necessary if x is expressed from y  */
     s->x = s->var_values[VAR_X] = av_expr_eval(s->x_pexpr, s->var_values, &s->prng);
 
     update_alpha(s);
@@ -1398,8 +1442,34 @@ static int draw_text(AVFilterContext *ctx, AVFrame *frame,
     update_color_with_alpha(s, &bordercolor, s->bordercolor);
     update_color_with_alpha(s, &boxcolor   , s->boxcolor   );
 
-    box_w = FFMIN(width - 1 , max_text_line_w);
-    box_h = FFMIN(height - 1, y + s->max_glyph_h);
+    box_w = max_text_line_w;
+    box_h = y + s->max_glyph_h;
+
+    if (s->fix_bounds) {
+
+        /* calculate footprint of text effects */
+        int boxoffset     = s->draw_box ? FFMAX(s->boxborderw, 0) : 0;
+        int borderoffset  = s->borderw  ? FFMAX(s->borderw, 0) : 0;
+
+        int offsetleft = FFMAX3(boxoffset, borderoffset,
+                                (s->shadowx < 0 ? FFABS(s->shadowx) : 0));
+        int offsettop = FFMAX3(boxoffset, borderoffset,
+                                (s->shadowy < 0 ? FFABS(s->shadowy) : 0));
+
+        int offsetright = FFMAX3(boxoffset, borderoffset,
+                                 (s->shadowx > 0 ? s->shadowx : 0));
+        int offsetbottom = FFMAX3(boxoffset, borderoffset,
+                                  (s->shadowy > 0 ? s->shadowy : 0));
+
+
+        if (s->x - offsetleft < 0) s->x = offsetleft;
+        if (s->y - offsettop < 0)  s->y = offsettop;
+
+        if (s->x + box_w + offsetright > width)
+            s->x = FFMAX(width - box_w - offsetright, 0);
+        if (s->y + box_h + offsetbottom > height)
+            s->y = FFMAX(height - box_h - offsetbottom, 0);
+    }
 
     /* draw box */
     if (s->draw_box)
@@ -1452,6 +1522,9 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *frame)
         NAN : frame->pts * av_q2d(inlink->time_base);
 
     s->var_values[VAR_PICT_TYPE] = frame->pict_type;
+    s->var_values[VAR_PKT_POS] = frame->pkt_pos;
+    s->var_values[VAR_PKT_DURATION] = frame->pkt_duration * av_q2d(inlink->time_base);
+    s->var_values[VAR_PKT_SIZE] = frame->pkt_size;
     s->metadata = frame->metadata;
 
     draw_text(ctx, frame, frame->width, frame->height);

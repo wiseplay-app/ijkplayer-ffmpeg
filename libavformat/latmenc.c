@@ -89,6 +89,10 @@ static int latm_write_header(AVFormatContext *s)
 
     if (par->codec_id == AV_CODEC_ID_AAC_LATM)
         return 0;
+    if (par->codec_id != AV_CODEC_ID_AAC && par->codec_id != AV_CODEC_ID_MP4ALS) {
+        av_log(ctx, AV_LOG_ERROR, "Only AAC, LATM and ALS are supported\n");
+        return AVERROR(EINVAL);
+    }
 
     if (par->extradata_size > 0 &&
         latm_decode_extradata(ctx, par->extradata, par->extradata_size) < 0)
@@ -128,7 +132,7 @@ static void latm_write_frame_header(AVFormatContext *s, PutBitContext *bs)
                 int ret = init_get_bits8(&gb, par->extradata, par->extradata_size);
                 av_assert0(ret >= 0); // extradata size has been checked already, so this should not fail
                 skip_bits_long(&gb, ctx->off + 3);
-                avpriv_copy_pce_data(bs, &gb);
+                ff_copy_pce_data(bs, &gb);
             }
         }
 

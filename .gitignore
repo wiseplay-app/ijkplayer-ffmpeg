@@ -30,7 +30,6 @@
 /ffmpeg
 /ffplay
 /ffprobe
-/ffserver
 /config.asm
 /config.h
 /coverage.info
@@ -38,3 +37,4 @@
 /lcov/
 /src
 /mapfile
+/tools/python/__pycache__/

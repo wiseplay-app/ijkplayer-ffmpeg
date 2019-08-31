@@ -27,7 +27,6 @@
 #include "libavcodec/bytestream.h"
 #include "libavutil/avstring.h"
 #include "libavutil/base64.h"
-#include "libavutil/hmac.h"
 #include "libavutil/intfloat.h"
 #include "libavutil/lfg.h"
 #include "libavutil/md5.h"
@@ -2608,8 +2607,10 @@ static int get_packet(URLContext *s, int for_header)
         rt->bytes_read += ret;
         if (rt->bytes_read - rt->last_bytes_read > rt->receive_report_size) {
             av_log(s, AV_LOG_DEBUG, "Sending bytes read report\n");
-            if ((ret = gen_bytes_read(s, rt, rpkt.timestamp + 1)) < 0)
+            if ((ret = gen_bytes_read(s, rt, rpkt.timestamp + 1)) < 0) {
+                ff_rtmp_packet_destroy(&rpkt);
                 return ret;
+            }
             rt->last_bytes_read = rt->bytes_read;
         }
 

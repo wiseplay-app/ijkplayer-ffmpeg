@@ -369,20 +369,18 @@ static int mp3_write_audio_packet(AVFormatContext *s, AVPacket *pkt)
 static int mp3_queue_flush(AVFormatContext *s)
 {
     MP3Context *mp3 = s->priv_data;
-    AVPacketList *pktl;
+    AVPacket pkt;
     int ret = 0, write = 1;
 
     ff_id3v2_finish(&mp3->id3, s->pb, s->metadata_header_padding);
     mp3_write_xing(s);
 
-    while ((pktl = mp3->queue)) {
-        if (write && (ret = mp3_write_audio_packet(s, &pktl->pkt)) < 0)
+    while (mp3->queue) {
+        ff_packet_list_get(&mp3->queue, &mp3->queue_end, &pkt);
+        if (write && (ret = mp3_write_audio_packet(s, &pkt)) < 0)
             write = 0;
-        av_packet_unref(&pktl->pkt);
-        mp3->queue = pktl->next;
-        av_freep(&pktl);
+        av_packet_unref(&pkt);
     }
-    mp3->queue_end = NULL;
     return ret;
 }
 
@@ -393,6 +391,7 @@ static void mp3_update_xing(AVFormatContext *s)
     uint16_t tag_crc;
     uint8_t *toc;
     int i, rg_size;
+    int64_t old_pos = avio_tell(s->pb);
 
     /* replace "Xing" identification string with "Info" for CBR files. */
     if (!mp3->has_variable_bitrate)
@@ -452,7 +451,7 @@ static void mp3_update_xing(AVFormatContext *s)
 
     avio_seek(s->pb,  mp3->xing_frame_offset, SEEK_SET);
     avio_write(s->pb, mp3->xing_frame, mp3->xing_frame_size);
-    avio_seek(s->pb, 0, SEEK_END);
+    avio_seek(s->pb, old_pos, SEEK_SET);
 }
 
 static int mp3_write_trailer(struct AVFormatContext *s)
@@ -514,21 +513,14 @@ static int mp3_write_packet(AVFormatContext *s, AVPacket *pkt)
     if (pkt->stream_index == mp3->audio_stream_idx) {
         if (mp3->pics_to_write) {
             /* buffer audio packets until we get all the pictures */
-            AVPacketList *pktl = av_mallocz(sizeof(*pktl));
+            int ret = ff_packet_list_put(&mp3->queue, &mp3->queue_end, pkt, FF_PACKETLIST_FLAG_REF_PACKET);
 
-            if (!pktl || av_packet_ref(&pktl->pkt, pkt) < 0) {
-                av_freep(&pktl);
+            if (ret < 0) {
                 av_log(s, AV_LOG_WARNING, "Not enough memory to buffer audio. Skipping picture streams\n");
                 mp3->pics_to_write = 0;
                 mp3_queue_flush(s);
                 return mp3_write_audio_packet(s, pkt);
             }
-
-            if (mp3->queue_end)
-                mp3->queue_end->next = pktl;
-            else
-                mp3->queue = pktl;
-            mp3->queue_end = pktl;
         } else
             return mp3_write_audio_packet(s, pkt);
     } else {

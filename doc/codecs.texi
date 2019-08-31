@@ -44,12 +44,6 @@ Use 1/4 pel motion compensation.
 Use loop filter.
 @item qscale
 Use fixed qscale.
-@item gmc
-Use gmc.
-@item mv0
-Always try a mb with mv=<0,0>.
-@item input_preserved
-
 @item pass1
 Use internal 2pass ratecontrol in first pass mode.
 @item pass2
@@ -61,9 +55,10 @@ Do not draw edges.
 @item psnr
 Set error[?] variables during encoding.
 @item truncated
+@item drop_changed
+Don't output frames whose parameters differ from first decoded frame in stream.
+Error AVERROR_INPUT_CHANGED is returned when a frame is dropped.
 
-@item naq
-Normalize adaptive quantization.
 @item ildct
 Use interlaced DCT.
 @item low_delay
@@ -475,8 +470,6 @@ rate control
 macroblock (MB) type
 @item qp
 per-block quantization parameter (QP)
-@item mv
-motion vector
 @item dct_coeff
 
 @item green_metadata
@@ -486,39 +479,18 @@ display complexity metadata for the upcoming frame, GoP or for a given duration.
 
 @item startcode
 
-@item pts
-
 @item er
 error recognition
 @item mmco
 memory management control operations (H.264)
 @item bugs
 
-@item vis_qp
-visualize quantization parameter (QP), lower QP are tinted greener
-@item vis_mb_type
-visualize block types
 @item buffers
 picture buffer allocations
 @item thread_ops
 threading operations
 @item nomc
 skip motion compensation
-@end table
-
-@item vismv @var{integer} (@emph{decoding,video})
-Visualize motion vectors (MVs).
-
-This option is deprecated, see the codecview filter instead.
-
-Possible values:
-@table @samp
-@item pf
-forward predicted MVs of P-frames
-@item bf
-forward predicted MVs of B-frames
-@item bb
-backward predicted MVs of B-frames
 @end table
 
 @item cmp @var{integer} (@emph{encoding,video})
@@ -757,8 +729,6 @@ Set context model.
 
 @item slice_flags @var{integer}
 
-@item xvmc_acceleration @var{integer}
-
 @item mbd @var{integer} (@emph{encoding,video})
 Set macroblock decision algorithm (high quality mode).
 
@@ -808,8 +778,6 @@ Place global headers at every keyframe instead of in extradata.
 Frame data might be split into multiple chunks.
 @item showall
 Show all frames before the first keyframe.
-@item skiprd
-Deprecated, use mpegvideo private options instead.
 @item export_mvs
 Export motion vectors into frame side-data (see @code{AV_FRAME_DATA_MOTION_VECTORS})
 for codecs that support it. See also @file{doc/examples/export_mvs.c}.
@@ -995,6 +963,9 @@ Discard all bidirectional frames.
 @item nokey
 Discard all frames excepts keyframes.
 
+@item nointra
+Discard all frames except I frames.
+
 @item all
 Discard all frames.
 @end table
@@ -1018,10 +989,6 @@ Set chroma qp offset from luma.
 
 @item trellis @var{integer} (@emph{encoding,audio,video})
 Set rate-distortion optimal quantization.
-
-@item sc_factor @var{integer} (@emph{encoding,video})
-Set value multiplied by qscale for each frame and added to
-scene_change_score.
 
 @item mv0_threshold @var{integer} (@emph{encoding,video})
 @item b_sensitivity @var{integer} (@emph{encoding,video})
@@ -1269,7 +1236,7 @@ instead of alpha. Default is 0.
 @item dump_separator @var{string} (@emph{input})
 Separator used to separate the fields printed on the command line about the
 Stream parameters.
-For example to separate the fields with newlines and indention:
+For example, to separate the fields with newlines and indentation:
 @example
 ffprobe -dump_separator "
                           "  -i ~/videos/matrixbench_mpeg2.mpg
