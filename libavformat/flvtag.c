@@ -305,7 +305,7 @@ static int flv_tag_decode_body(uint8_t *buffer, int buffer_size,
     if(!in)
         return AVERROR(ENOMEM);
 
-    while(!url_feof(in)) {
+    while(!avio_feof(in)) {
         byte = avio_r8(in);
         filter = (byte >> 5) & 0x01;
         tag_type = (byte & 0x01F);

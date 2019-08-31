@@ -246,7 +246,7 @@ static int f4fbox_parse(AVIOContext *in, int64_t data_size, void *opague)
     int64_t bytes_read = 0;
     int ret;
 
-    while(!url_feof(in) && bytes_read + 8 < data_size) {
+    while(!avio_feof(in) && bytes_read + 8 < data_size) {
         if((ret = f4fbox_parse_single_box(in, opague)) < 0) {
             av_log(NULL, AV_LOG_ERROR, "f4fbox Failed to parse box, ret: %d \n", ret);
             return ret;

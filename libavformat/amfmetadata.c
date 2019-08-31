@@ -151,7 +151,7 @@ static int amf_metadata_parse_object(AVIOContext *in, AMFMetadata *metadata)
 {
     int ret;
 
-    while(!url_feof(in)) {
+    while(!avio_feof(in)) {
         if((ret = amf_metadata_parse_object_property(in, metadata)) < 0) {
             if(avio_r8(in) != AMF_END_OF_OBJECT)
                 return ret;
@@ -168,7 +168,7 @@ static int amf_metadata_parse_strict_array(AVIOContext *in, AMFMetadata *metadat
     int ret;
 
     length = avio_rb32(in);
-    while(!url_feof(in) && length > 0) {
+    while(!avio_feof(in) && length > 0) {
         if((ret = amf_metadata_parse_value(in, metadata, NULL)) < 0)
             return ret;
         length--;

@@ -131,8 +131,8 @@ static int download_bootstrap(AVFormatContext *s, HDSBootstrapInfo *bootstrap,
 
     memset(url, 0x00, sizeof(url));
 
-    if(!av_stristr(bootstrap->url, "?") && av_stristr(s->filename, "?")) {
-        construct_bootstrap_url(c->base_url, bootstrap->url, av_stristr(s->filename, "?"), url, MAX_URL_SIZE);
+    if(!av_stristr(bootstrap->url, "?") && av_stristr(s->url, "?")) {
+        construct_bootstrap_url(c->base_url, bootstrap->url, av_stristr(s->url, "?"), url, MAX_URL_SIZE);
     } else {
         construct_bootstrap_url(c->base_url, bootstrap->url, "", url, MAX_URL_SIZE);
     }
@@ -143,7 +143,7 @@ static int download_bootstrap(AVFormatContext *s, HDSBootstrapInfo *bootstrap,
     }
 
     buffer_size = ffurl_size(puc);
-    buffer = av_mallocz(buffer_size+FF_INPUT_BUFFER_PADDING_SIZE);
+    buffer = av_mallocz(buffer_size+AV_INPUT_BUFFER_PADDING_SIZE);
     if(!buffer)
         return AVERROR(ENOMEM);
 
@@ -224,11 +224,11 @@ static int create_streams(AVFormatContext *s, HDSMedia *media, AMFMetadata *meta
     st->id = 0;
     avpriv_set_pts_info(st, 32, 1, 1000);
 
-    st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
-    st->codec->codec_id = metadata->video_codec_id;
-    st->codec->width = metadata->width;
-    st->codec->height = metadata->height;
-    st->codec->bit_rate = metadata->video_data_rate * 1000;
+    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    st->codecpar->codec_id = metadata->video_codec_id;
+    st->codecpar->width = metadata->width;
+    st->codecpar->height = metadata->height;
+    st->codecpar->bit_rate = metadata->video_data_rate * 1000;
 
     st = avformat_new_stream(s, NULL);
     if(!st)
@@ -239,12 +239,12 @@ static int create_streams(AVFormatContext *s, HDSMedia *media, AMFMetadata *meta
     st->id = 0;
     avpriv_set_pts_info(st, 32, 1, 1000);
 
-    st->codec->codec_type = AVMEDIA_TYPE_AUDIO;
-    st->codec->codec_id = metadata->audio_codec_id;
-    st->codec->channels = metadata->nb_audio_channels;
-    st->codec->sample_rate = metadata->audio_sample_rate;
-    st->codec->sample_fmt = AV_SAMPLE_FMT_S16;
-    st->codec->bit_rate = metadata->audio_data_rate * 1000;
+    st->codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
+    st->codecpar->codec_id = metadata->audio_codec_id;
+    st->codecpar->channels = metadata->nb_audio_channels;
+    st->codecpar->sample_rate = metadata->audio_sample_rate;
+    st->codecpar->format = AV_SAMPLE_FMT_S16;
+    st->codecpar->bit_rate = metadata->audio_data_rate * 1000;
 
     return 0;
 }
@@ -347,16 +347,16 @@ static int hds_read_header(AVFormatContext *s)
     char *p, *pch;
     int ret;
 
-    p = av_stristr(s->filename, ".f4m");
+    p = av_stristr(s->url, ".f4m");
     
-    pch = strrchr(s->filename, '/');
+    pch = strrchr(s->url, '/');
     
     if(!p || !pch) {
-        av_log(NULL, AV_LOG_ERROR, "hds Failed to build base url, url: %s \n", s->filename);
+        av_log(NULL, AV_LOG_ERROR, "hds Failed to build base url, url: %s \n", s->url);
         return -1;
     }
     
-    av_strlcpy(c->base_url, s->filename, pch - s->filename + 2);
+    av_strlcpy(c->base_url, s->url, pch - s->url + 2);
     
     av_log(NULL, AV_LOG_DEBUG, "hds build base url: %s \n", c->base_url);
     
@@ -593,9 +593,9 @@ static int download_fragment(AVFormatContext *s,
 
     memset(url, 0x00, sizeof(url));
 
-    if(!av_stristr(media->url, "?") && av_stristr(s->filename, "?")) {
+    if(!av_stristr(media->url, "?") && av_stristr(s->url, "?")) {
         construct_fragment_url(c->base_url, media->url,
-            segment, fragment, av_stristr(s->filename, "?"), url, MAX_URL_SIZE);
+            segment, fragment, av_stristr(s->url, "?"), url, MAX_URL_SIZE);
     } else {
         construct_fragment_url(c->base_url, media->url,
             segment, fragment, "", url, MAX_URL_SIZE);
@@ -608,7 +608,7 @@ static int download_fragment(AVFormatContext *s,
     }
 
     buffer_size = ffurl_size(puc);
-    buffer = av_mallocz(buffer_size+FF_INPUT_BUFFER_PADDING_SIZE);
+    buffer = av_mallocz(buffer_size+AV_INPUT_BUFFER_PADDING_SIZE);
     if(!buffer)
         return AVERROR(ENOMEM);
 
@@ -794,7 +794,7 @@ static int hds_close(AVFormatContext *s)
     return 0;
 }
 
-static int hds_probe(AVProbeData *p)
+static int hds_probe(const AVProbeData *p)
 {
     if(p->filename && av_stristr(p->filename, ".f4m"))
         return AVPROBE_SCORE_MAX;
