@@ -536,7 +536,6 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
     AVFormatContext *s = *ps;
     int i, ret = 0;
     AVDictionary *tmp = NULL;
-    AVDictionary *tmp2 = NULL;
     ID3v2ExtraMeta *id3v2_extra_meta = NULL;
 
     if (!s && !(s = avformat_alloc_context()))
@@ -624,16 +623,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
         ff_id3v2_read_dict(s->pb, &s->internal->id3v2_meta, ID3v2_DEFAULT_MAGIC, &id3v2_extra_meta);
 
 
-    if (!(s->flags&AVFMT_FLAG_PRIV_OPT)) {
-        if (s->iformat->read_header2) {
-            if (options)
-                av_dict_copy(&tmp2, *options, 0);
-
-            if ((ret = s->iformat->read_header2(s, &tmp2)) < 0)
-                goto fail;
-        } else if (s->iformat->read_header && (ret = s->iformat->read_header(s)) < 0)
+    if (!(s->flags&AVFMT_FLAG_PRIV_OPT) && s->iformat->read_header)
+        if ((ret = s->iformat->read_header(s)) < 0)
             goto fail;
-    }
 
     if (!s->metadata) {
         s->metadata = s->internal->id3v2_meta;
@@ -673,7 +665,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
     if (options) {
         av_dict_free(options);
         *options = tmp;
-        av_dict_free(&tmp2);
     }
     *ps = s;
     return 0;
@@ -684,7 +675,6 @@ close:
 fail:
     ff_id3v2_free_extra_meta(&id3v2_extra_meta);
     av_dict_free(&tmp);
-    av_dict_free(&tmp2);
     if (s->pb && !(s->flags & AVFMT_FLAG_CUSTOM_IO))
         avio_closep(&s->pb);
     avformat_free_context(s);
@@ -3640,43 +3630,6 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
     int eof_reached = 0;
     int *missing_streams = av_opt_ptr(ic->iformat->priv_class, ic->priv_data, "missing_streams");
 
-    AVDictionaryEntry *t;
-
-    t = av_dict_get(ic->metadata, "nb-streams", NULL, AV_DICT_MATCH_CASE);
-    if (t) {
-        int nb_streams = (int) strtol(t->value, NULL, 10);
-        if (nb_streams > 0) {
-            int64_t read_size = 0;
-            while (ic->nb_streams < nb_streams) {
-                if (read_size >= probesize)
-                    return ic->nb_streams;
-
-                ret = read_frame_internal(ic, &pkt1);
-                if (ret == AVERROR(EAGAIN))
-                    continue;
-                if (ret < 0) {
-                    /* EOF or error*/
-                    eof_reached = 1;
-                    break;
-                }
-                pkt = &pkt1;
-
-                if (!(ic->streams[pkt->stream_index]->disposition & AV_DISPOSITION_ATTACHED_PIC))
-                    read_size += pkt->size;
-
-                if (!(ic->flags & AVFMT_FLAG_NOBUFFER)) {
-                    ret = ff_packet_list_put(&ic->internal->packet_buffer,
-                                             &ic->internal->packet_buffer_end, 
-                                             pkt, 0);
-                    if (ret < 0)
-                        return ret;
-                }
-            }
-            av_dict_set_int(&ic->metadata, "nb-streams", 0, 0);
-            return ret < 0 ? ret : ic->nb_streams;
-        }
-    }
-
     flush_codecs = probesize > 0;
 
     av_opt_set(ic, "skip_clear", "1", AV_OPT_SEARCH_CHILDREN);
@@ -3800,20 +3753,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
             st = ic->streams[i];
             if (!has_codec_parameters(st, NULL))
                 break;
-
-            if (ic->metadata) {
-                AVDictionaryEntry *t = av_dict_get(ic->metadata, "skip-calc-frame-rate", NULL, AV_DICT_MATCH_CASE);
-                if (t) {
-                    int fps_flag = (int) strtol(t->value, NULL, 10);
-                    if (!st->r_frame_rate.num && st->avg_frame_rate.num > 0 && st->avg_frame_rate.den > 0 && fps_flag > 0) {
-                        int avg_fps = st->avg_frame_rate.num / st->avg_frame_rate.den;
-                        if (avg_fps > 0 && avg_fps <= 120) {
-                            st->r_frame_rate.num = st->avg_frame_rate.num;
-                            st->r_frame_rate.den = st->avg_frame_rate.den;
-                        }
-                    }
-                }
-            }
             /* If the timebase is coarse (like the usual millisecond precision
              * of mkv), we need to analyze more frames to reliably arrive at
              * the correct fps. */
