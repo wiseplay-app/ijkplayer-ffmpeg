@@ -88,18 +88,6 @@ int ff_av1_filter_obus_buf(const uint8_t *in, uint8_t **out,
 int ff_av1_parse_seq_header(AV1SequenceParameters *seq, const uint8_t *buf, int size);
 
 /**
- * Parses a Sequence Header from the the provided buffer.
- *
- * @param seq pointer to the AV1SequenceParameters where the parsed values will
- *            be written
- * @param buf input data buffer
- * @param size size in bytes of the input data buffer
- *
- * @return >= 0 in case of success, a negative AVERROR code in case of failure
- */
-int ff_av1_parse_seq_header(AV1SequenceParameters *seq, const uint8_t *buf, int size);
-
-/**
  * Writes AV1 extradata (Sequence Header and Metadata OBUs) to the provided
  * AVIOContext.
  *

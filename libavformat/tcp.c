@@ -23,7 +23,6 @@
 #include "libavutil/parseutils.h"
 #include "libavutil/opt.h"
 #include "libavutil/time.h"
-#include "libavutil/application.h"
 
 #include "internal.h"
 #include "network.h"
@@ -46,8 +45,6 @@ typedef struct TCPContext {
 #if !HAVE_WINSOCK2_H
     int tcp_mss;
 #endif /* !HAVE_WINSOCK2_H */
-    int64_t app_ctx_intptr;
-    AVApplicationContext *app_ctx;
 } TCPContext;
 
 #define OFFSET(x) offsetof(TCPContext, x)
@@ -63,7 +60,6 @@ static const AVOption options[] = {
 #if !HAVE_WINSOCK2_H
     { "tcp_mss",     "Maximum segment size for outgoing TCP packets",          OFFSET(tcp_mss),     AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
 #endif /* !HAVE_WINSOCK2_H */
-    { "ijkapplication",   "AVApplicationContext",                              OFFSET(app_ctx_intptr),   AV_OPT_TYPE_INT64, { .i64 = 0 }, INT64_MIN, INT64_MAX, .flags = D },
     { NULL }
 };
 
@@ -114,8 +110,6 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     int ret;
     char hostname[1024],proto[1024],path[1024];
     char portstr[10];
-    AVAppTcpIOControl control = {0};
-    s->app_ctx = (AVApplicationContext *)(intptr_t)s->app_ctx_intptr;
     s->open_timeout = 5000000;
 
     av_url_split(proto, sizeof(proto), NULL, 0, hostname, sizeof(hostname),
@@ -201,23 +195,9 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         // Socket descriptor already closed here. Safe to overwrite to client one.
         fd = ret;
     } else {
-        ret = av_application_on_tcp_will_open(s->app_ctx);
-        if (ret) {
-            av_log(NULL, AV_LOG_WARNING, "terminated by application in AVAPP_CTRL_WILL_TCP_OPEN");
+        ret = ff_connect_parallel(ai, s->open_timeout / 1000, 3, h, &fd, customize_fd, s);
+        if (ret < 0)
             goto fail1;
-        }
-
-        ret = ff_connect_parallel(cur_ai, s->open_timeout / 1000, 3, h, &fd, customize_fd, s);
-        if (ret < 0) {
-            av_application_on_tcp_did_open(s->app_ctx, ret, fd, &control);
-            goto fail1;
-        } else {
-            ret = av_application_on_tcp_did_open(s->app_ctx, 0, fd, &control);
-            if (ret) {
-                av_log(NULL, AV_LOG_WARNING, "terminated by application in AVAPP_CTRL_DID_TCP_OPEN");
-                goto fail1;
-            }
-        }
     }
 
     h->is_streamed = 1;
@@ -262,8 +242,6 @@ static int tcp_read(URLContext *h, uint8_t *buf, int size)
             return ret;
     }
     ret = recv(s->fd, buf, size, 0);
-    if (ret > 0)
-        av_application_did_io_tcp_read(s->app_ctx, (void*)h, ret);
     if (ret == 0)
         return AVERROR_EOF;
     return ret < 0 ? ff_neterrno() : ret;

@@ -213,8 +213,6 @@ typedef struct HLSContext {
     int http_multiple;
     int http_seekable;
     AVIOContext *playlist_pb;
-    int hls_io_protocol_enable;
-    char * hls_io_protocol;
 } HLSContext;
 
 static void free_segment_dynarray(struct segment **segments, int n_segments)
@@ -635,10 +633,6 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
     int ret;
     int is_http = 0;
 
-    av_dict_copy(&tmp, opts, 0);
-    av_dict_copy(&tmp, opts2, 0);
-    av_dict_set(&tmp, "seekable", "1", 0);
-
     if (av_strstart(url, "crypto", NULL)) {
         if (url[6] == '+' || url[6] == ':')
             proto_name = avio_find_protocol_name(url + 7);
@@ -666,8 +660,6 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
         is_http = 1;
     } else if (av_strstart(proto_name, "data", NULL)) {
         ;
-    } else if (c->hls_io_protocol_enable) {
-        is_http = 1;
     } else
         return AVERROR_INVALIDDATA;
 
@@ -727,7 +719,6 @@ static int parse_playlist(HLSContext *c, const char *url,
     int has_iv = 0;
     char key[MAX_URL_SIZE] = "";
     char line[MAX_URL_SIZE];
-    char io_url[MAX_URL_SIZE] = "";
     const char *ptr;
     int close_in = 0;
     int64_t seg_offset = 0;
@@ -929,22 +920,6 @@ static int parse_playlist(HLSContext *c, const char *url,
                 }
 
                 ff_make_absolute_url(tmp_str, sizeof(tmp_str), url, line);
-
-                if (c->hls_io_protocol_enable) {
-                    char * url_start = NULL;
-                    if (c->hls_io_protocol) {
-                        strcpy(io_url, c->hls_io_protocol);
-                    } else if ((url_start =  strstr(url,"http://")) ||
-                                (url_start =  strstr(url,"https://"))) {
-                        strncpy(io_url, url, url_start - url);
-                    }
-                    av_strlcat(io_url, tmp_str, sizeof(io_url));
-                    seg->url = av_strdup(io_url);
-                    memset(io_url, 0, sizeof(io_url));
-                } else {
-                    seg->url = av_strdup(tmp_str);
-                }
-
                 if (!tmp_str[0]) {
                     ret = AVERROR_INVALIDDATA;
                     if (seg->key)
@@ -1539,13 +1514,7 @@ reload:
             av_log(v->parent, AV_LOG_WARNING, "Failed to open segment %d of playlist %d\n",
                    v->cur_seq_no,
                    v->index);
-
-            if (c->hls_io_protocol_enable && (parse_playlist(c, v->url, v, NULL)) < 0) {
-                av_log(NULL, AV_LOG_INFO, "Failed to reload playlist %d\n",
-                       v->index);
-            } else {
-                v->cur_seq_no += 1;
-            }
+            v->cur_seq_no += 1;
             goto reload;
         }
         just_opened = 1;
@@ -2174,12 +2143,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
                 AVRational tb;
                 ret = av_read_frame(pls->ctx, &pls->pkt);
                 if (ret < 0) {
-                    //when error occur try to renew m3u8
-                    if (c->hls_io_protocol_enable && (parse_playlist(c, pls->url, pls, NULL)) < 0) {
-                        av_log(NULL, AV_LOG_INFO, "Failed to reload playlist %d\n",
-                               pls->index);
-                    }
-
                     if (!avio_feof(&pls->pb) && ret != AVERROR_EOF)
                         return ret;
                     reset_packet(&pls->pkt);
@@ -2383,8 +2346,9 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
 
 static int hls_probe(const AVProbeData *p)
 {
-    /* Require #EXTM3U at the start, and either one of the ones below somewhere for a proper match. */
-    if (!strstr(p->buf, "#EXTM3U"))
+    /* Require #EXTM3U at the start, and either one of the ones below
+     * somewhere for a proper match. */
+    if (strncmp(p->buf, "#EXTM3U", 7))
         return 0;
 
     if (strstr(p->buf, "#EXT-X-STREAM-INF:")     ||

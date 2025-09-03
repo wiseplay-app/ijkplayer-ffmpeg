@@ -1958,12 +1958,12 @@ typedef struct AVFormatContext {
     int max_probe_packets;
 
     /**
-     * Ijk: AVFormat status code.
-     * Values:
-     *  0:  no error;
-     *  -1: failed when opening input file in quick-parsing mode;
-     *  -2: failed when playing in quick-parsing mode;
-     */
+ * Ijk: AVFormat status code.
+ * Values:
+ *  0:  no error;
+ *  -1: failed when opening input file in quick-parsing mode;
+ *  -2: failed when playing in quick-parsing mode;
+ */
     int demuxer_status_code;
 } AVFormatContext;
 
