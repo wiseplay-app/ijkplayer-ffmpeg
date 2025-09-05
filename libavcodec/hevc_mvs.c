@@ -25,18 +25,18 @@
 #include "hevcdec.h"
 
 static const uint8_t l0_l1_cand_idx[12][2] = {
-    { 0, 1, },
-    { 1, 0, },
-    { 0, 2, },
-    { 2, 0, },
-    { 1, 2, },
-    { 2, 1, },
-    { 0, 3, },
-    { 3, 0, },
-    { 1, 3, },
-    { 3, 1, },
-    { 2, 3, },
-    { 3, 2, },
+        { 0, 1, },
+        { 1, 0, },
+        { 0, 2, },
+        { 2, 0, },
+        { 1, 2, },
+        { 2, 1, },
+        { 0, 3, },
+        { 3, 0, },
+        { 1, 3, },
+        { 3, 1, },
+        { 2, 3, },
+        { 3, 2, },
 };
 
 void ff_hevc_set_neighbour_available(HEVCContext *s, int x0, int y0,
@@ -51,10 +51,10 @@ void ff_hevc_set_neighbour_available(HEVCContext *s, int x0, int y0,
     lc->na.cand_up_left  = (!x0b && !y0b) ? lc->ctb_up_left_flag : lc->na.cand_left && lc->na.cand_up;
     lc->na.cand_up_right_sap =
             ((x0b + nPbW) == (1 << s->ps.sps->log2_ctb_size)) ?
-                    lc->ctb_up_right_flag && !y0b : lc->na.cand_up;
+            lc->ctb_up_right_flag && !y0b : lc->na.cand_up;
     lc->na.cand_up_right =
             lc->na.cand_up_right_sap
-                     && (x0 + nPbW) < lc->end_of_tiles_x;
+            && (x0 + nPbW) < lc->end_of_tiles_x;
     lc->na.cand_bottom_left = ((y0 + nPbH) >= lc->end_of_tiles_y) ? 0 : lc->na.cand_left;
 }
 
@@ -62,7 +62,7 @@ void ff_hevc_set_neighbour_available(HEVCContext *s, int x0, int y0,
  * 6.4.1 Derivation process for z-scan order block availability
  */
 static av_always_inline int z_scan_block_avail(HEVCContext *s, int xCurr, int yCurr,
-                              int xN, int yN)
+                                               int xN, int yN)
 {
 #define MIN_TB_ADDR_ZS(x, y)                                            \
     s->ps.pps->min_tb_addr_zs[(y) * (s->ps.sps->tb_mask+2) + (x)]
@@ -75,9 +75,9 @@ static av_always_inline int z_scan_block_avail(HEVCContext *s, int xCurr, int yC
         return 1;
     else {
         int Curr = MIN_TB_ADDR_ZS((xCurr >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask,
-                (yCurr >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask);
+                                  (yCurr >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask);
         int N    = MIN_TB_ADDR_ZS((xN >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask,
-                (yN >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask);
+                                  (yN >> s->ps.sps->log2_min_tb_size) & s->ps.sps->tb_mask);
         return N <= Curr;
     }
 }
@@ -121,9 +121,9 @@ static av_always_inline void mv_scale(Mv *dst, Mv *src, int td, int tb)
     tx = (0x4000 + abs(td / 2)) / td;
     scale_factor = av_clip_intp2((tb * tx + 32) >> 6, 12);
     dst->x = av_clip_int16((scale_factor * src->x + 127 +
-                           (scale_factor * src->x < 0)) >> 8);
+                            (scale_factor * src->x < 0)) >> 8);
     dst->y = av_clip_int16((scale_factor * src->y + 127 +
-                           (scale_factor * src->y < 0)) >> 8);
+                            (scale_factor * src->y < 0)) >> 8);
 }
 
 static int check_mvset(Mv *mvLXCol, Mv *mvCol,
@@ -203,9 +203,9 @@ static int derive_temporal_colocated_mvs(HEVCContext *s, MvField temp_col,
 #define TAB_MVF(x, y)                                                   \
     tab_mvf[(y) * min_pu_width + x]
 
-#define TAB_MVF_PU(v)                                                   \
-    TAB_MVF(((x ## v) >> s->ps.sps->log2_min_pu_size),                     \
-            ((y ## v) >> s->ps.sps->log2_min_pu_size))
+#define TAB_MVF_PU_XY(xv, yv)                                                   \
+    TAB_MVF(((xv) >> s->ps.sps->log2_min_pu_size),                     \
+            ((yv) >> s->ps.sps->log2_min_pu_size))
 
 #define DERIVE_TEMPORAL_COLOCATED_MVS                                   \
     derive_temporal_colocated_mvs(s, temp_col,                          \
@@ -270,14 +270,14 @@ static int temporal_luma_motion_vector(HEVCContext *s, int x0, int y0,
     return availableFlagLXCol;
 }
 
-#define AVAILABLE(cand, v)                                      \
-    (cand && !(TAB_MVF_PU(v).pred_flag == PF_INTRA))
+#define AVAILABLE_XY(cand, xv, yv) \
+    (cand && !(TAB_MVF_PU_XY(xv, yv).pred_flag == PF_INTRA))
 
 #define PRED_BLOCK_AVAILABLE(v)                                 \
     z_scan_block_avail(s, x0, y0, x ## v, y ## v)
 
-#define COMPARE_MV_REFIDX(a, b)                                 \
-    compare_mv_ref_idx(TAB_MVF_PU(a), TAB_MVF_PU(b))
+#define COMPARE_MV_REFIDX_XY(xA, yA, xB, yB)                                 \
+    compare_mv_ref_idx(TAB_MVF_PU_XY(xA, yA), TAB_MVF_PU_XY(xB, yB))
 
 /*
  * 8.5.3.1.2  Derivation process for spatial merging candidates
@@ -289,6 +289,13 @@ static void derive_spatial_merge_candidates(HEVCContext *s, int x0, int y0,
                                             int merge_idx,
                                             struct MvField mergecandlist[])
 {
+// Coordinates for spatial merge candidates
+    int xA0 = x0 - 1; int yA0 = y0 + nPbH;
+    int xA1 = x0 - 1; int yA1 = y0 + nPbH - 1;
+    int xB0 = x0 + nPbW; int yB0 = y0 - 1;
+    int xB1 = x0 + nPbW - 1; int yB1 = y0 - 1;
+    int xB2 = x0 - 1; int yB2 = y0 - 1;
+
     HEVCLocalContext *lc   = s->HEVClc;
     RefPicList *refPicList = s->ref->refPicList;
     MvField *tab_mvf       = s->ref->tab_mvf;
@@ -301,20 +308,6 @@ static void derive_spatial_merge_candidates(HEVCContext *s, int x0, int y0,
     const int cand_up          = lc->na.cand_up;
     const int cand_up_right    = lc->na.cand_up_right_sap;
 
-    const int xA1    = x0 - 1;
-    const int yA1    = y0 + nPbH - 1;
-
-    const int xB1    = x0 + nPbW - 1;
-    const int yB1    = y0 - 1;
-
-    const int xB0    = x0 + nPbW;
-    const int yB0    = y0 - 1;
-
-    const int xA0    = x0 - 1;
-    const int yA0    = y0 + nPbH;
-
-    const int xB2    = x0 - 1;
-    const int yB2    = y0 - 1;
 
     const int nb_refs = (s->sh.slice_type == HEVC_SLICE_P) ?
                         s->sh.nb_refs[0] : FFMIN(s->sh.nb_refs[0], s->sh.nb_refs[1]);
@@ -338,9 +331,9 @@ static void derive_spatial_merge_candidates(HEVCContext *s, int x0, int y0,
         is_diff_mer(s, xA1, yA1, x0, y0)) {
         is_available_a1 = 0;
     } else {
-        is_available_a1 = AVAILABLE(cand_left, A1);
+        is_available_a1 = AVAILABLE_XY(cand_left, xA1, yA1);
         if (is_available_a1) {
-            mergecandlist[nb_merge_cand] = TAB_MVF_PU(A1);
+            mergecandlist[nb_merge_cand] = TAB_MVF_PU_XY(xA1, yA1);
             if (merge_idx == 0)
                 return;
             nb_merge_cand++;
@@ -354,10 +347,10 @@ static void derive_spatial_merge_candidates(HEVCContext *s, int x0, int y0,
         is_diff_mer(s, xB1, yB1, x0, y0)) {
         is_available_b1 = 0;
     } else {
-        is_available_b1 = AVAILABLE(cand_up, B1);
+        is_available_b1 = AVAILABLE_XY(cand_up, xB1, yB1);
         if (is_available_b1 &&
-            !(is_available_a1 && COMPARE_MV_REFIDX(B1, A1))) {
-            mergecandlist[nb_merge_cand] = TAB_MVF_PU(B1);
+            !(is_available_a1 && COMPARE_MV_REFIDX_XY(xB1, yB1, xA1, yB1))) {
+            mergecandlist[nb_merge_cand] = TAB_MVF_PU_XY(xB1, yB1);
             if (merge_idx == nb_merge_cand)
                 return;
             nb_merge_cand++;
@@ -365,42 +358,42 @@ static void derive_spatial_merge_candidates(HEVCContext *s, int x0, int y0,
     }
 
     // above right spatial merge candidate
-    is_available_b0 = AVAILABLE(cand_up_right, B0) &&
+    is_available_b0 = AVAILABLE_XY(cand_up_right, xB0, yB0) &&
                       xB0 < s->ps.sps->width &&
                       PRED_BLOCK_AVAILABLE(B0) &&
                       !is_diff_mer(s, xB0, yB0, x0, y0);
 
     if (is_available_b0 &&
-        !(is_available_b1 && COMPARE_MV_REFIDX(B0, B1))) {
-        mergecandlist[nb_merge_cand] = TAB_MVF_PU(B0);
+        !(is_available_b1 && COMPARE_MV_REFIDX_XY(xB0, yB0, xB1, yB1))) {
+        mergecandlist[nb_merge_cand] = TAB_MVF_PU_XY(xB0, yB0);
         if (merge_idx == nb_merge_cand)
             return;
         nb_merge_cand++;
     }
 
     // left bottom spatial merge candidate
-    is_available_a0 = AVAILABLE(cand_bottom_left, A0) &&
+    is_available_a0 = AVAILABLE_XY(cand_bottom_left, xA0, yA0) &&
                       yA0 < s->ps.sps->height &&
                       PRED_BLOCK_AVAILABLE(A0) &&
                       !is_diff_mer(s, xA0, yA0, x0, y0);
 
     if (is_available_a0 &&
-        !(is_available_a1 && COMPARE_MV_REFIDX(A0, A1))) {
-        mergecandlist[nb_merge_cand] = TAB_MVF_PU(A0);
+        !(is_available_a1 && COMPARE_MV_REFIDX_XY(xA0, yA0, xA1, yA1))) {
+        mergecandlist[nb_merge_cand] = TAB_MVF_PU_XY(xA0, yA0);
         if (merge_idx == nb_merge_cand)
             return;
         nb_merge_cand++;
     }
 
     // above left spatial merge candidate
-    is_available_b2 = AVAILABLE(cand_up_left, B2) &&
+    is_available_b2 = AVAILABLE_XY(cand_up_left, xB2, yB2) &&
                       !is_diff_mer(s, xB2, yB2, x0, y0);
 
     if (is_available_b2 &&
-        !(is_available_a1 && COMPARE_MV_REFIDX(B2, A1)) &&
-        !(is_available_b1 && COMPARE_MV_REFIDX(B2, B1)) &&
+        !(is_available_a1 && COMPARE_MV_REFIDX_XY(xB2, yB2, xA1, yA1)) &&
+        !(is_available_b1 && COMPARE_MV_REFIDX_XY(xB2, yB2, xB1, yB1)) &&
         nb_merge_cand != 4) {
-        mergecandlist[nb_merge_cand] = TAB_MVF_PU(B2);
+        mergecandlist[nb_merge_cand] = TAB_MVF_PU_XY(xB2, yB2);
         if (merge_idx == nb_merge_cand)
             return;
         nb_merge_cand++;
@@ -554,7 +547,7 @@ static int mv_mp_mode_mx_lt(HEVCContext *s, int x, int y, int pred_flag_index,
         int currIsLongTerm     = refPicList[ref_idx_curr].isLongTerm[ref_idx];
 
         int colIsLongTerm =
-            refPicList[pred_flag_index].isLongTerm[(TAB_MVF(x, y).ref_idx[pred_flag_index])];
+                refPicList[pred_flag_index].isLongTerm[(TAB_MVF(x, y).ref_idx[pred_flag_index])];
 
         if (colIsLongTerm == currIsLongTerm) {
             *mv = TAB_MVF(x, y).mv[pred_flag_index];
@@ -584,6 +577,12 @@ void ff_hevc_luma_mv_mvp_mode(HEVCContext *s, int x0, int y0, int nPbW,
                               int merge_idx, MvField *mv,
                               int mvp_lx_flag, int LX)
 {
+    int xA0 = x0 - 1; int yA0 = y0 + nPbH;
+    int xA1 = x0 - 1; int yA1 = y0 + nPbH - 1;
+    int xB0 = x0 + nPbW; int yB0 = y0 - 1;
+    int xB1 = x0 + nPbW - 1; int yB1 = y0 - 1;
+    int xB2 = x0 - 1; int yB2 = y0 - 1;
+
     HEVCLocalContext *lc = s->HEVClc;
     MvField *tab_mvf = s->ref->tab_mvf;
     int isScaledFlag_L0 = 0;
@@ -592,15 +591,10 @@ void ff_hevc_luma_mv_mvp_mode(HEVCContext *s, int x0, int y0, int nPbW,
     int numMVPCandLX = 0;
     int min_pu_width = s->ps.sps->min_pu_width;
 
-    int xA0, yA0;
     int is_available_a0;
-    int xA1, yA1;
     int is_available_a1;
-    int xB0, yB0;
     int is_available_b0;
-    int xB1, yB1;
     int is_available_b1;
-    int xB2, yB2;
     int is_available_b2;
 
     Mv mvpcand_list[2] = { { 0 } };
@@ -625,7 +619,7 @@ void ff_hevc_luma_mv_mvp_mode(HEVCContext *s, int x0, int y0, int nPbW,
     xA0 = x0 - 1;
     yA0 = y0 + nPbH;
 
-    is_available_a0 = AVAILABLE(cand_bottom_left, A0) &&
+    is_available_a0 = AVAILABLE_XY(cand_bottom_left, xA0, yA0) &&
                       yA0 < s->ps.sps->height &&
                       PRED_BLOCK_AVAILABLE(A0);
 
@@ -633,7 +627,7 @@ void ff_hevc_luma_mv_mvp_mode(HEVCContext *s, int x0, int y0, int nPbW,
     xA1    = x0 - 1;
     yA1    = y0 + nPbH - 1;
 
-    is_available_a1 = AVAILABLE(cand_left, A1);
+    is_available_a1 = AVAILABLE_XY(cand_left, xA1, yA1);
     if (is_available_a0 || is_available_a1)
         isScaledFlag_L0 = 1;
 
@@ -674,25 +668,25 @@ void ff_hevc_luma_mv_mvp_mode(HEVCContext *s, int x0, int y0, int nPbW,
     }
     availableFlagLXA0 = 0;
 
-b_candidates:
+    b_candidates:
     // B candidates
     // above right spatial merge candidate
     xB0    = x0 + nPbW;
     yB0    = y0 - 1;
 
-    is_available_b0 =  AVAILABLE(cand_up_right, B0) &&
+    is_available_b0 =  AVAILABLE_XY(cand_up_right, xB0, yB0) &&
                        xB0 < s->ps.sps->width &&
                        PRED_BLOCK_AVAILABLE(B0);
 
     // above spatial merge candidate
     xB1    = x0 + nPbW - 1;
     yB1    = y0 - 1;
-    is_available_b1 = AVAILABLE(cand_up, B1);
+    is_available_b1 = AVAILABLE_XY(cand_up, xB1, yB1);
 
     // above left spatial merge candidate
     xB2 = x0 - 1;
     yB2 = y0 - 1;
-    is_available_b2 = AVAILABLE(cand_up_left, B2);
+    is_available_b2 = AVAILABLE_XY(cand_up_left, xB2, yB2);
 
     // above right spatial merge candidate
     if (is_available_b0) {
@@ -725,7 +719,7 @@ b_candidates:
     }
     availableFlagLXB0 = 0;
 
-scalef:
+    scalef:
     if (!isScaledFlag_L0) {
         if (availableFlagLXB0) {
             availableFlagLXA0 = 1;

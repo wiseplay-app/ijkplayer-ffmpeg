@@ -20,26 +20,6 @@
 
 /**
  * @file
- * DNN native backend implementation.
- */
-
-#include "libavcodec/avcodec.h"
-
-typedef struct AMFMetadata {
-    int width;
-    int height;
-    int frame_rate;
-    int audio_sample_rate;
-    int nb_audio_channels;
-    int audio_data_rate;
-    int video_data_rate;
-
-    enum AVCodecID audio_codec_id;
-    enum AVCodecID video_codec_id;
-} AMFMetadata;
-
-int ff_parse_amf_metadata(uint8_t *buffer, int buffer_size, AMFMetadata *metadata);
-
  * DNN inference functions interface for native backend.
  */
 
